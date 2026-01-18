@@ -9,7 +9,8 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 try:
@@ -30,6 +31,15 @@ app = FastAPI(title="Chat Backend", version="0.1.0")
 _DOTENV_PATH = Path(__file__).with_name(".env")
 if load_dotenv:
     load_dotenv(dotenv_path=_DOTENV_PATH, override=False)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[],
+    allow_origin_regex=".*",
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _RATE_LIMIT_WINDOW_SECONDS = 60
 _RATE_LIMIT_MAX_REQUESTS = 30
@@ -73,6 +83,16 @@ def _require_requests() -> None:
 @app.get("/")
 def root() -> dict:
     return {"status": "ok"}
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket) -> None:
+    await websocket.accept()
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        return
 
 
 def _enforce_rate_limit(client_id: str) -> None:

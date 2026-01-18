@@ -22,7 +22,7 @@ interface TradingConsultantProps {
   className?: string;
 }
 
-const API_ENDPOINT = import.meta.env.VITE_CHAT_API_URL || 'http://10.19.132.108:8000/api/chat';
+const API_ENDPOINT = import.meta.env.VITE_CHAT_API_URL || 'http://127.0.0.1:8000/chat';
 
 export function TradingConsultant({ className }: TradingConsultantProps) {
   const [messages, setMessages] = useState<Message[]>([
@@ -82,11 +82,20 @@ export function TradingConsultant({ className }: TradingConsultantProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: userMessage.content,
-          // Add any additional context you want to send:
-          // - current market data
-          // - user's trading history
-          // - conversation history (optional)
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a helpful trading consultant. Keep answers concise and actionable.',
+            },
+            ...messages.map((message) => ({
+              role: message.role,
+              content: message.content,
+            })),
+            {
+              role: 'user',
+              content: userMessage.content,
+            },
+          ],
         }),
       });
 
@@ -101,7 +110,7 @@ export function TradingConsultant({ className }: TradingConsultantProps) {
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: data.message || data.response || data.content || 'I apologize, but I couldn\'t process that request.',
+        content: data.reply || data.message || data.response || data.content || 'I apologize, but I couldn\'t process that request.',
         timestamp: Date.now(),
       };
 
