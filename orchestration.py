@@ -222,9 +222,9 @@ class SimulationOrchestrator:
         
         seller = self._agent_portfolios[trade.seller_id]
         seller.cash += trade_value
-        seller.positions[trade.stock_id] -= trade.size
-        if seller.positions[trade.stock_id] == 0:
-            del seller.positions[trade.stock_id]
+        seller.positions[trade.stock_id] = seller.positions.get(trade.stock_id, 0) - trade.size
+        if seller.positions.get(trade.stock_id, 0) == 0:
+            seller.positions.pop(trade.stock_id, None)
     
     # -------------------------------------------------------------------------
     # Getters
