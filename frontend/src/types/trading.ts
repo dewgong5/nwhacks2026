@@ -21,6 +21,7 @@ export interface TraderResult {
   rank: number;
   previousRank: number;
   isUser?: boolean;
+  customPrompt?: string; // Custom AI strategy prompt
 }
 
 export interface TickData {

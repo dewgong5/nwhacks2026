@@ -18,6 +18,7 @@ import { PostMarketAnalysis } from '@/components/PostMarketAnalysis';
 import { TradingConsultant } from '@/components/TradingConsultant';
 import { TraderResult } from '@/types/trading';
 import { useMarketStore } from '@/store/marketStore';
+import { useSimulationControls } from '@/store/MarketProvider';
 
 const Index = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -25,6 +26,7 @@ const Index = () => {
   const [userTrader, setUserTrader] = useState<TraderResult | undefined>();
   
   const { state, dispatch } = useMarketStore();
+  const { isConnected, isSimulationStarted, startSimulation } = useSimulationControls();
   const isSessionComplete = state.simStatus.tickCount >= state.simStatus.maxTicks;
 
   // Auto-pause when session is complete
@@ -62,6 +64,17 @@ const Index = () => {
     };
     setUserTrader(fullTrader);
     setIsProfileOpen(false);
+    
+    // Start simulation with custom agent config
+    if (trader.customPrompt) {
+      startSimulation({
+        name: trader.name,
+        prompt: trader.customPrompt,
+      });
+    } else {
+      // Start without custom agent
+      startSimulation();
+    }
   };
 
   return (

@@ -13,7 +13,7 @@ import {
   AgentActivityPayload,
 } from '@/types/market';
 
-const WS_URL = 'ws://10.19.132.108:8000/ws';
+const WS_URL = 'ws://localhost:8000/ws';
 
 // Mock data generation removed - only WebSocket data is used
 
@@ -504,6 +504,12 @@ function parseWebSocketMessage(data: string, state: MarketStore, isRecursive: bo
   }
 }
 
+// Custom agent config for starting simulation
+interface CustomAgentConfig {
+  name: string;
+  prompt: string;
+}
+
 export function useMarketEventStream(
   state: MarketStore,
   dispatch: React.Dispatch<MarketAction>
@@ -514,12 +520,45 @@ export function useMarketEventStream(
   const stateRef = useRef(state);
   const dispatchRef = useRef(dispatch);
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  const [simulationStarted, setSimulationStarted] = useState(false);
   
   // Keep refs updated
   useEffect(() => {
     stateRef.current = state;
     dispatchRef.current = dispatch;
   }, [state, dispatch]);
+  
+  // Function to start simulation with custom agent config
+  const startSimulation = (customAgent?: CustomAgentConfig) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('WebSocket not connected, cannot start simulation');
+      return false;
+    }
+    
+    if (simulationStarted) {
+      console.warn('Simulation already started');
+      return false;
+    }
+    
+    const startCommand: any = {
+      command: "start_simulation",
+      num_ticks: 20,
+      tick_delay: 1.0
+    };
+    
+    if (customAgent && customAgent.prompt) {
+      startCommand.custom_agent = {
+        name: customAgent.name,
+        prompt: customAgent.prompt
+      };
+      console.log('🎮 Starting with custom agent:', customAgent.name);
+    }
+    
+    wsRef.current.send(JSON.stringify(startCommand));
+    console.log('Sent start simulation command:', startCommand);
+    setSimulationStarted(true);
+    return true;
+  };
   
   // WebSocket connection
   useEffect(() => {
@@ -538,14 +577,8 @@ export function useMarketEventStream(
             reconnectTimeoutRef.current = null;
           }
           
-          // Send start simulation command
-          const startCommand = {
-            command: "start_simulation",
-            num_ticks: 20,
-            tick_delay: 1.0
-          };
-          wsRef.current.send(JSON.stringify(startCommand));
-          console.log('Sent start simulation command:', startCommand);
+          // Don't auto-start - wait for user to create trader profile
+          console.log('WebSocket ready. Waiting for user to start simulation...');
         };
 
         wsRef.current.onmessage = (event) => {
@@ -646,5 +679,10 @@ export function useMarketEventStream(
     };
   }, [dispatch, state]);
 
-  // No mock data - only WebSocket data is used
+  // Return hook utilities
+  return {
+    isConnected: isWebSocketConnected,
+    isSimulationStarted: simulationStarted,
+    startSimulation,
+  };
 }

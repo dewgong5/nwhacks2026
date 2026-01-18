@@ -3,6 +3,7 @@
 // Horizontal compact version for under the chart
 // ============================================
 
+import { forwardRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, TrendingUp, TrendingDown, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import { AgentActivityPayload } from '@/types/market';
@@ -37,31 +38,36 @@ interface CompactActivityItemProps {
   activity: AgentActivityPayload;
 }
 
-function CompactActivityItem({ activity }: CompactActivityItemProps) {
-  const Icon = ACTION_ICONS[activity.action];
-  
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 20 }}
-      className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-muted/30 hover:bg-accent/50 transition-colors shrink-0"
-    >
-      <div className={cn(
-        "p-1 rounded-full bg-muted/50 shrink-0",
-        ACTION_COLORS[activity.action]
-      )}>
-        <Icon size={10} />
-      </div>
-      <span className={cn("text-xs font-medium shrink-0", AGENT_TYPE_COLORS[activity.agentType])}>
-        {activity.agentName}
-      </span>
-      <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
-        {activity.summary.replace(activity.agentName, '').trim()}
-      </span>
-    </motion.div>
-  );
-}
+const CompactActivityItem = forwardRef<HTMLDivElement, CompactActivityItemProps>(
+  ({ activity }, ref) => {
+    const Icon = ACTION_ICONS[activity.action];
+    
+    return (
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 20 }}
+        className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-muted/30 hover:bg-accent/50 transition-colors shrink-0"
+      >
+        <div className={cn(
+          "p-1 rounded-full bg-muted/50 shrink-0",
+          ACTION_COLORS[activity.action]
+        )}>
+          <Icon size={10} />
+        </div>
+        <span className={cn("text-xs font-medium shrink-0", AGENT_TYPE_COLORS[activity.agentType])}>
+          {activity.agentName}
+        </span>
+        <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
+          {activity.summary.replace(activity.agentName, '').trim()}
+        </span>
+      </motion.div>
+    );
+  }
+);
+
+CompactActivityItem.displayName = 'CompactActivityItem';
 
 export function CompactAgentFeed() {
   const { state } = useMarketStore();

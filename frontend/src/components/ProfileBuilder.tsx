@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Rocket, Brain, Gauge, Zap, Sparkles } from 'lucide-react';
+import { X, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { TraderProfile, TraderResult } from '@/types/trading';
+import { Textarea } from '@/components/ui/textarea';
+import { TraderResult } from '@/types/trading';
 
 interface ProfileBuilderProps {
   isOpen: boolean;
@@ -15,37 +13,19 @@ interface ProfileBuilderProps {
   onSubmit: (trader: Omit<TraderResult, 'rank' | 'previousRank' | 'previousPnL'>) => void;
 }
 
-const strategyDescriptions = {
-  momentum: 'Rides trends and breakouts. Best in strong directional markets.',
-  meanReversion: 'Bets on price returning to average. Thrives in range-bound markets.',
-  passive: 'Holds positions long-term. Low turnover, steady approach.',
-  sentiment: 'Reacts to news and market sentiment. Volatile but high potential.',
-  custom: 'Your unique AI-driven strategy. Full control.',
-};
+const EXAMPLE_PROMPTS = [
+  "I am a momentum trader. I buy stocks that are going UP and sell stocks that are going DOWN.",
+  "I am a contrarian. When stocks drop more than 5%, I buy. When they rise more than 5%, I sell.",
+  "I am a value investor. I only buy stocks trading below their historical average price.",
+  "I am aggressive. I make large trades (50+ shares) and chase the biggest movers.",
+];
 
 export function ProfileBuilder({ isOpen, onClose, onSubmit }: ProfileBuilderProps) {
   const [name, setName] = useState('');
-  const [strategy, setStrategy] = useState<TraderProfile['strategyType']>('momentum');
-  const [risk, setRisk] = useState(50);
-  const [speed, setSpeed] = useState(50);
-  const [enableAI, setEnableAI] = useState(false);
-
-  const getPersonalitySummary = () => {
-    const riskLabel = risk < 33 ? 'Conservative' : risk < 66 ? 'Balanced' : 'Aggressive';
-    const speedLabel = speed < 33 ? 'Patient' : speed < 66 ? 'Adaptive' : 'Rapid-fire';
-    const strategyLabel = {
-      momentum: 'Momentum',
-      meanReversion: 'Mean Reversion',
-      passive: 'Passive',
-      sentiment: 'Sentiment',
-      custom: 'Custom AI',
-    }[strategy];
-    
-    return `${speedLabel} ${strategyLabel.toLowerCase()} trader with ${riskLabel.toLowerCase()} risk profile`;
-  };
+  const [customPrompt, setCustomPrompt] = useState('');
 
   const handleSubmit = () => {
-    if (!name.trim()) return;
+    if (!name.trim() || !customPrompt.trim()) return;
     
     onSubmit({
       id: `user-${Date.now()}`,
@@ -56,10 +36,16 @@ export function ProfileBuilder({ isOpen, onClose, onSubmit }: ProfileBuilderProp
       winRate: 50,
       sparklineData: [0],
       isUser: true,
+      customPrompt: customPrompt.trim(),
     });
     
     onClose();
     setName('');
+    setCustomPrompt('');
+  };
+
+  const useExample = (prompt: string) => {
+    setCustomPrompt(prompt);
   };
 
   return (
@@ -81,7 +67,7 @@ export function ProfileBuilder({ isOpen, onClose, onSubmit }: ProfileBuilderProp
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-card border-l border-border z-50 overflow-y-auto"
+            className="fixed right-0 top-0 bottom-0 w-full max-w-lg bg-card border-l border-border z-50 overflow-y-auto"
           >
             <div className="p-6">
               {/* Header */}
@@ -91,8 +77,8 @@ export function ProfileBuilder({ isOpen, onClose, onSubmit }: ProfileBuilderProp
                     <Rocket className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Create Your Trader</h2>
-                    <p className="text-sm text-muted-foreground">Build a custom AI profile</p>
+                    <h2 className="text-xl font-bold">Create Your AI Trader</h2>
+                    <p className="text-sm text-muted-foreground">Write a system prompt for your agent</p>
                   </div>
                 </div>
                 <button
@@ -117,108 +103,49 @@ export function ProfileBuilder({ isOpen, onClose, onSubmit }: ProfileBuilderProp
                   />
                 </div>
 
-                {/* Strategy */}
+                {/* Custom Prompt */}
                 <div className="space-y-2">
-                  <Label>Strategy Type</Label>
-                  <Select value={strategy} onValueChange={(v) => setStrategy(v as TraderProfile['strategyType'])}>
-                    <SelectTrigger className="bg-secondary border-border">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="momentum">
-                        <div className="flex items-center gap-2">
-                          <Zap className="h-4 w-4 text-yellow-400" />
-                          Momentum Chaser
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="meanReversion">
-                        <div className="flex items-center gap-2">
-                          <Gauge className="h-4 w-4 text-blue-400" />
-                          Mean Reversion
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="passive">
-                        <div className="flex items-center gap-2">
-                          <Brain className="h-4 w-4 text-purple-400" />
-                          Passive Indexer
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="sentiment">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="h-4 w-4 text-pink-400" />
-                          Sentiment Trader
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="custom">
-                        <div className="flex items-center gap-2">
-                          <Rocket className="h-4 w-4 text-cyan-400" />
-                          Custom AI
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">{strategyDescriptions[strategy]}</p>
-                </div>
-
-                {/* Risk */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Risk Appetite</Label>
-                    <span className="text-sm font-mono text-muted-foreground">{risk}%</span>
-                  </div>
-                  <Slider
-                    value={[risk]}
-                    onValueChange={([v]) => setRisk(v)}
-                    max={100}
-                    step={1}
+                  <Label htmlFor="prompt">System Prompt</Label>
+                  <Textarea
+                    id="prompt"
+                    placeholder="Describe your trading strategy... e.g., 'I am a momentum trader. I buy stocks going up and sell stocks going down.'"
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    className="bg-secondary border-border min-h-[200px] font-mono text-sm"
                   />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Conservative</span>
-                    <span>Aggressive</span>
+                  <p className="text-xs text-muted-foreground">
+                    This prompt tells the AI how to trade. Be specific about when to buy/sell and position sizes.
+                  </p>
+                </div>
+
+                {/* Example Prompts */}
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Quick Examples</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {EXAMPLE_PROMPTS.map((prompt, i) => (
+                      <button
+                        key={i}
+                        onClick={() => useExample(prompt)}
+                        className="text-xs px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-colors text-muted-foreground hover:text-foreground"
+                      >
+                        {prompt.split('.')[0].replace('I am ', '')}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Speed */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Reaction Speed</Label>
-                    <span className="text-sm font-mono text-muted-foreground">{speed}%</span>
+                {/* Preview */}
+                {customPrompt && (
+                  <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
+                    <p className="text-sm font-medium text-primary mb-1">Your Strategy</p>
+                    <p className="text-sm text-foreground line-clamp-3">{customPrompt}</p>
                   </div>
-                  <Slider
-                    value={[speed]}
-                    onValueChange={([v]) => setSpeed(v)}
-                    max={100}
-                    step={1}
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Patient</span>
-                    <span>Rapid-fire</span>
-                  </div>
-                </div>
-
-                {/* AI Toggle */}
-                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="ai-toggle" className="cursor-pointer">Enable AI Reasoning</Label>
-                    <p className="text-xs text-muted-foreground">Advanced decision explanations</p>
-                  </div>
-                  <Switch
-                    id="ai-toggle"
-                    checked={enableAI}
-                    onCheckedChange={setEnableAI}
-                  />
-                </div>
-
-                {/* Personality Preview */}
-                <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
-                  <p className="text-sm font-medium text-primary mb-1">Your Trader Personality</p>
-                  <p className="text-sm text-foreground">{getPersonalitySummary()}</p>
-                </div>
+                )}
 
                 {/* Submit */}
                 <Button
                   onClick={handleSubmit}
-                  disabled={!name.trim()}
+                  disabled={!name.trim() || !customPrompt.trim()}
                   className="w-full h-12 text-base font-semibold"
                   size="lg"
                 >

@@ -93,8 +93,20 @@ async def broadcast(message: dict):
         connected_clients.discard(client)
 
 
-async def run_simulation_streaming(num_ticks: int = 20, tick_delay: float = 1.0):
-    """Run simulation and stream each tick to connected clients."""
+async def run_simulation_streaming(
+    num_ticks: int = 20, 
+    tick_delay: float = 1.0,
+    custom_agent_config: dict = None
+):
+    """Run simulation and stream each tick to connected clients.
+    
+    Args:
+        num_ticks: Number of simulation ticks
+        tick_delay: Delay between ticks in seconds
+        custom_agent_config: Optional config for custom agent:
+            - name: Display name for the agent
+            - prompt: Custom system prompt for trading strategy
+    """
     
     # Load stocks
     stock_data = load_stocks()
@@ -150,10 +162,20 @@ async def run_simulation_streaming(num_ticks: int = 20, tick_delay: float = 1.0)
     retail_4 = DumbRetailHolder("retail_4", orchestrator, stock_history)
     retail_daytrader = DumbRetailDaytrader("retail_daytrader", orchestrator, stock_history)
     
-    # Custom agent
+    # Custom agent - use config if provided, otherwise default strategy
     my_agent = None
+    my_agent_name = "MY_AGENT"  # Default name
+    
     if CUSTOM_AGENT_AVAILABLE:
-        MY_STRATEGY = """
+        if custom_agent_config and custom_agent_config.get("prompt"):
+            # User provided custom strategy
+            MY_STRATEGY = custom_agent_config["prompt"]
+            my_agent_name = custom_agent_config.get("name", "MY_AGENT").upper()
+            print(f"\n🎮 Creating custom agent: {my_agent_name}")
+            print(f"   Strategy: {MY_STRATEGY[:100]}...")
+        else:
+            # Default strategy
+            MY_STRATEGY = """
 I am a SMART CONTRARIAN. I look for overreactions in the market.
 - When a stock drops MORE than 5% below its historical average, I BUY (oversold)
 - When a stock rises MORE than 5% above its historical average, I SELL (overbought)
@@ -210,13 +232,14 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                         action_text = "BUYS" if tool == "buy" else "SELLS"
                         event = f"{emoji} {name} {action_text} {size} {ticker_sym}"
                         print(f"  {event}")
-                        await broadcast({"event": event})  # SEND IMMEDIATELY
+                        await broadcast({"event": event})
+                        await asyncio.sleep(0.1)  # Small delay between events
                 else:
                     print("  (no trades)")
             except Exception as e:
                 print(f"  Error: {e}")
         
-        # Dumb retail agents decide - STREAM EVENTS IMMEDIATELY
+        # Dumb retail agents decide - STREAM EVENTS WITH DELAY
         retail_agents = [
             (retail_1, "RETAIL_1", "👤"), (retail_2, "RETAIL_2", "👤"),
             (retail_3, "RETAIL_3", "👤"), (retail_4, "RETAIL_4", "👤"),
@@ -232,15 +255,16 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                     if "BUY" in action_text.upper() or "SELL" in action_text.upper():
                         event = f"{emoji} {name} {action_text}"
                         print(f"  {action_text}")
-                        await broadcast({"event": event})  # SEND IMMEDIATELY
+                        await broadcast({"event": event})
+                        await asyncio.sleep(0.15)  # Delay to match console pace
                     else:
                         print(f"  {action_text}")
             else:
                 print("  (holding)")
         
-        # Custom agent decides - STREAM EVENTS IMMEDIATELY
+        # Custom agent decides - STREAM EVENTS WITH DELAY
         if my_agent:
-            print(f"\n[🎮 MY_AGENT thinking...]")
+            print(f"\n[🎮 {my_agent_name} thinking...]")
             try:
                 actions = my_agent.decide(tick)
                 trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
@@ -251,9 +275,10 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                         ticker_sym = args.get('ticker', '?')
                         size = args.get('size', 0)
                         action_text = "BUYS" if tool == "buy" else "SELLS"
-                        event = f"🎮 MY_AGENT {action_text} {size} {ticker_sym}"
+                        event = f"🎮 {my_agent_name} {action_text} {size} {ticker_sym}"
                         print(f"  {event}")
-                        await broadcast({"event": event})  # SEND IMMEDIATELY
+                        await broadcast({"event": event})
+                        await asyncio.sleep(0.1)  # Small delay between events
                 else:
                     print("  (no trades)")
             except Exception as e:
@@ -312,13 +337,18 @@ async def websocket_endpoint(websocket: WebSocket):
                     num_ticks = data.get("num_ticks", 20)
                     tick_delay = data.get("tick_delay", 1.0)
                     
+                    # Extract custom agent config if provided
+                    custom_agent_config = data.get("custom_agent")
+                    # custom_agent format: {"name": "My Bot", "prompt": "I am a momentum trader..."}
+                    
                     if simulation_task is None or simulation_task.done():
                         simulation_task = asyncio.create_task(
-                            run_simulation_streaming(num_ticks, tick_delay)
+                            run_simulation_streaming(num_ticks, tick_delay, custom_agent_config)
                         )
                         await websocket.send_json({
                             "type": "simulation_starting",
-                            "num_ticks": num_ticks
+                            "num_ticks": num_ticks,
+                            "custom_agent": custom_agent_config.get("name") if custom_agent_config else None
                         })
                     else:
                         await websocket.send_json({
@@ -373,6 +403,15 @@ if __name__ == "__main__":
     print("  Start:     POST http://localhost:8000/start")
     print("\nTo start simulation, connect via WebSocket and send:")
     print('  {"command": "start_simulation", "num_ticks": 20, "tick_delay": 1.0}')
+    print("\nWith custom agent:")
+    print('  {')
+    print('    "command": "start_simulation",')
+    print('    "num_ticks": 20,')
+    print('    "custom_agent": {')
+    print('      "name": "My Bot",')
+    print('      "prompt": "I am a momentum trader who buys stocks going up..."')
+    print('    }')
+    print('  }')
     print("=" * 60)
     
     uvicorn.run(app, host="0.0.0.0", port=8000)
