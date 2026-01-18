@@ -23,6 +23,7 @@ const EXAMPLE_PROMPTS = [
 export function ProfileBuilder({ isOpen, onClose, onSubmit }: ProfileBuilderProps) {
   const [name, setName] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
+  const [capital, setCapital] = useState(100000);
 
   const handleSubmit = () => {
     if (!name.trim() || !customPrompt.trim()) return;
@@ -37,11 +38,13 @@ export function ProfileBuilder({ isOpen, onClose, onSubmit }: ProfileBuilderProp
       sparklineData: [0],
       isUser: true,
       customPrompt: customPrompt.trim(),
+      capital: capital,
     });
     
     onClose();
     setName('');
     setCustomPrompt('');
+    setCapital(100000);
   };
 
   const useExample = (prompt: string) => {
@@ -101,6 +104,24 @@ export function ProfileBuilder({ isOpen, onClose, onSubmit }: ProfileBuilderProp
                     onChange={(e) => setName(e.target.value)}
                     className="bg-secondary border-border"
                   />
+                </div>
+
+                {/* Starting Capital */}
+                <div className="space-y-2">
+                  <Label htmlFor="capital">Starting Capital ($)</Label>
+                  <Input
+                    id="capital"
+                    type="number"
+                    min={1000}
+                    max={10000000}
+                    step={1000}
+                    value={capital}
+                    onChange={(e) => setCapital(Number(e.target.value))}
+                    className="bg-secondary border-border"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How much money your AI starts with (min $1,000)
+                  </p>
                 </div>
 
                 {/* Custom Prompt */}

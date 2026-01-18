@@ -41,7 +41,7 @@ export function useTickSimulation() {
   const [speed, setSpeed] = useState<SimulationSpeed>('normal');
   const [currentSymbol, setCurrentSymbol] = useState('MMKT');
   const [tickCount, setTickCount] = useState(0);
-  const [maxTicks] = useState(100);
+  const [maxTicks] = useState(5);
   
   const [tickHistory, setTickHistory] = useState<TickData[]>(() => {
     const initial: TickData[] = [];

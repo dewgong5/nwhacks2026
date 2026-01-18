@@ -5,7 +5,7 @@
 
 import { forwardRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, TrendingUp, TrendingDown, LogIn, LogOut, RefreshCw } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, LogIn, LogOut, RefreshCw, Newspaper } from 'lucide-react';
 import { AgentActivityPayload } from '@/types/market';
 import { useMarketStore, selectAgentActivities } from '@/store/marketStore';
 import { cn } from '@/lib/utils';
@@ -40,8 +40,52 @@ interface CompactActivityItemProps {
 
 const CompactActivityItem = forwardRef<HTMLDivElement, CompactActivityItemProps>(
   ({ activity }, ref) => {
-    const Icon = ACTION_ICONS[activity.action];
+    const Icon = activity.isNews ? Newspaper : ACTION_ICONS[activity.action];
+    const isNews = activity.isNews;
+    const isPositive = activity.sentiment === 'positive';
     
+    // News events get special distinct styling
+    if (isNews) {
+      return (
+        <motion.div
+          ref={ref}
+          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          className={cn(
+            "flex items-start gap-3 px-4 py-3 rounded-xl shrink-0 border-2",
+            isPositive 
+              ? "bg-gain/10 border-gain/30" 
+              : "bg-loss/10 border-loss/30"
+          )}
+        >
+          <div className={cn(
+            "p-2 rounded-lg shrink-0",
+            isPositive ? "bg-gain/20 text-gain" : "bg-loss/20 text-loss"
+          )}>
+            <Newspaper size={16} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={cn(
+                "text-xs font-bold uppercase tracking-wider",
+                isPositive ? "text-gain" : "text-loss"
+              )}>
+                📰 Breaking News
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {activity.target}
+              </span>
+            </div>
+            <p className="text-sm font-medium leading-tight">
+              {activity.summary}
+            </p>
+          </div>
+        </motion.div>
+      );
+    }
+    
+    // Regular agent activity
     return (
       <motion.div
         ref={ref}

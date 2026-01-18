@@ -52,6 +52,46 @@ function parseWebSocketMessage(data: string, state: MarketStore, isRecursive: bo
     console.log('📥 Type value:', message.type);
 
     // ============================================
+    // FILTER: Check for simulation_complete event
+    // Format: {"type": "simulation_complete", "market_index": 100, "leaderboard": [...]}
+    // ============================================
+    if (message.type === 'simulation_complete') {
+      console.log('🏆 Simulation complete!', message);
+      events.push({
+        type: 'SIMULATION_COMPLETE',
+        payload: {
+          marketIndex: message.market_index,
+          leaderboard: message.leaderboard || [],
+        }
+      });
+      return events;
+    }
+
+    // ============================================
+    // FILTER: Check for news event
+    // Format: {"type": "news", "headline": "...", "stock": "AAPL", "sentiment": "positive"}
+    // ============================================
+    console.log('🔍 Checking for news - message.type:', message.type, 'is news?:', message.type === 'news');
+    if (message.type === 'news') {
+      console.log('📰📰📰 NEWS EVENT RECEIVED! 📰📰📰', message);
+      events.push({
+        type: 'AGENT_ACTIVITY',
+        payload: {
+          id: `news-${timestamp}-${Math.random()}`,
+          timestamp,
+          agentType: 'institutional' as const, // News gets special styling
+          agentName: '📰 BREAKING NEWS',
+          action: 'entered' as const,
+          target: message.stock,
+          summary: message.headline,
+          isNews: true, // Special flag for distinct styling
+          sentiment: message.sentiment,
+        }
+      });
+      return events;
+    }
+
+    // ============================================
     // FILTER: Check if this is an agent activity event
     // Priority: Check for agent activity FIRST before price events
     // Format: {"event": "🏦 CITADEL BUYS 30 AAPL"}
@@ -479,6 +519,15 @@ function parseWebSocketMessage(data: string, state: MarketStore, isRecursive: bo
           type: 'INDEX_TICK',
           payload: basePayload as any,
         });
+        
+        // Check for portfolio values in the message
+        if (message.portfolios && typeof message.portfolios === 'object') {
+          console.log('💰 Portfolio update received:', message.portfolios);
+          events.push({
+            type: 'PORTFOLIO_UPDATE',
+            payload: message.portfolios,
+          });
+        }
       }
     }
 
@@ -508,6 +557,7 @@ function parseWebSocketMessage(data: string, state: MarketStore, isRecursive: bo
 interface CustomAgentConfig {
   name: string;
   prompt: string;
+  capital?: number;
 }
 
 export function useMarketEventStream(
@@ -542,16 +592,17 @@ export function useMarketEventStream(
     
     const startCommand: any = {
       command: "start_simulation",
-      num_ticks: 20,
+      num_ticks: 5,
       tick_delay: 1.0
     };
     
     if (customAgent && customAgent.prompt) {
       startCommand.custom_agent = {
         name: customAgent.name,
-        prompt: customAgent.prompt
+        prompt: customAgent.prompt,
+        capital: customAgent.capital || 100000
       };
-      console.log('🎮 Starting with custom agent:', customAgent.name);
+      console.log('🎮 Starting with custom agent:', customAgent.name, 'Capital:', customAgent.capital);
     }
     
     wsRef.current.send(JSON.stringify(startCommand));

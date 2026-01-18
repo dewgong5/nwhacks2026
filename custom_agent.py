@@ -124,8 +124,21 @@ Respond with ONLY valid JSON. No other text.
         
         return {"error": f"Unknown tool: {tool}"}
     
-    def decide(self, tick: int, max_tool_calls: int = 5) -> list[dict]:
+    def decide(self, tick: int, max_tool_calls: int = 5, news: dict = None) -> list[dict]:
         actions = []
+        
+        # Build news alert if present
+        news_alert = ""
+        if news:
+            sentiment_emoji = "🚀" if news.get("sentiment") == "positive" else "📉"
+            news_alert = f"""
+⚠️ BREAKING NEWS ALERT ⚠️
+{sentiment_emoji} {news.get('headline', 'Market news')}
+Stock affected: {news.get('stock', 'Unknown')}
+Sentiment: {news.get('sentiment', 'neutral').upper()}
+
+Consider reacting to this news in your trading decisions!
+"""
         
         system_prompt = f"""You are {self.agent_id}, a custom trading agent.
 
@@ -133,13 +146,13 @@ YOUR TRADING STRATEGY:
 {self.custom_prompt}
 
 Current tick: {tick}
-
+{news_alert}
 {self.get_tools_description()}
 
 IMPORTANT:
 1. First call get_portfolio and get_prices to understand your position
 2. Call get_history to see price trends
-3. Make trading decisions based on YOUR strategy
+3. Make trading decisions based on YOUR strategy and any news
 4. Call done when finished
 
 Respond with ONLY JSON."""

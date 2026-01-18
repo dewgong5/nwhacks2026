@@ -74,9 +74,10 @@ export function createInitialState(): MarketStore {
       running: true,
       speed: 'normal',
       tickCount: 0,
-      maxTicks: 100,
+      maxTicks: 5,
     },
     agentActivities: [],
+    agentPortfolios: {},
     subscribedInstruments,
   };
 }
@@ -209,6 +210,28 @@ export function marketReducer(state: MarketStore, action: MarketAction): MarketS
             agentActivities: newActivities,
           };
         }
+        
+        case 'SIMULATION_COMPLETE': {
+          console.log('🏆 Storing simulation results:', event.payload);
+          return {
+            ...state,
+            simStatus: {
+              ...state.simStatus,
+              running: false,  // Stop the simulation
+            },
+            simulationResults: {
+              marketIndex: event.payload.marketIndex,
+              leaderboard: event.payload.leaderboard,
+            },
+          };
+        }
+        
+        case 'PORTFOLIO_UPDATE': {
+          return {
+            ...state,
+            agentPortfolios: event.payload,
+          };
+        }
       }
       
       return state;
@@ -308,6 +331,8 @@ export const selectBottomPerformers = (state: MarketStore, count: number = 3): M
 
 export const selectAgentActivities = (state: MarketStore, count?: number): AgentActivityPayload[] => 
   count !== undefined ? state.agentActivities.slice(0, count) : state.agentActivities;
+
+export const selectAgentPortfolios = (state: MarketStore) => state.agentPortfolios;
 
 export const selectIsRunning = (state: MarketStore): boolean => 
   state.simStatus.running;

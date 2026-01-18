@@ -11,12 +11,12 @@ import {
   BarChart3, 
   Home, 
   RefreshCw,
-  Clock,
-  Target
+  Target,
+  Crown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { useMarketStore, selectIndex, selectTopPerformers, selectBottomPerformers, selectSectors } from '@/store/marketStore';
+import { useMarketStore, selectIndex, selectTopPerformers, selectBottomPerformers } from '@/store/marketStore';
 import { TraderResult } from '@/types/trading';
 import { cn } from '@/lib/utils';
 
@@ -32,10 +32,19 @@ export function PostMarketAnalysis({ isOpen, onClose, onRestart, userTrader }: P
   const index = selectIndex(state);
   const topPerformers = selectTopPerformers(state, 3);
   const bottomPerformers = selectBottomPerformers(state, 3);
-  const sectors = selectSectors(state);
   
-  const positiveCount = sectors.filter(s => s.changePercent > 0).length;
-  const breadth = (positiveCount / sectors.length) * 100;
+  // Find user's agent in leaderboard to get actual P&L
+  const userAgentResult = state.simulationResults?.leaderboard?.find(
+    a => a.id === 'my_agent' || a.type === 'custom'
+  );
+  
+  // Get leaderboard sorted by P&L % (already sorted this way from backend)
+  const topByPnlPct = state.simulationResults?.leaderboard?.slice(0, 3) || [];
+  
+  // Get leaderboard sorted by absolute profit $
+  const topByProfit = state.simulationResults?.leaderboard
+    ? [...state.simulationResults.leaderboard].sort((a, b) => b.pnl - a.pnl).slice(0, 3)
+    : [];
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -60,36 +69,41 @@ export function PostMarketAnalysis({ isOpen, onClose, onRestart, userTrader }: P
         </div>
         
         <div className="p-6 space-y-6">
-          {/* User Performance (if trader exists) */}
-          {userTrader && (
+          {/* User Performance (if trader exists and we have results) */}
+          {userTrader && userAgentResult && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="glass-card p-4"
+              className="glass-card p-4 border border-primary/30"
             >
               <div className="flex items-center gap-2 mb-4">
                 <Target size={16} className="text-primary" />
-                <h3 className="font-semibold">Your Performance</h3>
+                <h3 className="font-semibold">Your Performance - {userTrader.name}</h3>
               </div>
               
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center">
                   <p className="text-xs text-muted-foreground">Final Rank</p>
-                  <p className="text-2xl font-bold text-primary">#{userTrader.rank}</p>
+                  <p className="text-2xl font-bold text-primary">#{userAgentResult.rank}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs text-muted-foreground">Total PnL</p>
+                  <p className="text-xs text-muted-foreground">Return %</p>
                   <p className={cn(
                     "text-2xl font-mono font-bold",
-                    userTrader.currentPnL >= 0 ? 'text-gain' : 'text-loss'
+                    userAgentResult.pnl_pct >= 0 ? 'text-gain' : 'text-loss'
                   )}>
-                    {userTrader.currentPnL >= 0 ? '+' : ''}${Math.abs(userTrader.currentPnL).toLocaleString()}
+                    {userAgentResult.pnl_pct >= 0 ? '+' : ''}{userAgentResult.pnl_pct.toFixed(2)}%
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs text-muted-foreground">Strategy</p>
-                  <p className="text-lg font-medium capitalize">{userTrader.type}</p>
+                  <p className="text-xs text-muted-foreground">Profit/Loss</p>
+                  <p className={cn(
+                    "text-2xl font-mono font-bold",
+                    userAgentResult.pnl >= 0 ? 'text-gain' : 'text-loss'
+                  )}>
+                    ${userAgentResult.pnl >= 0 ? '+' : ''}{userAgentResult.pnl.toLocaleString()}
+                  </p>
                 </div>
               </div>
             </motion.div>
@@ -107,10 +121,10 @@ export function PostMarketAnalysis({ isOpen, onClose, onRestart, userTrader }: P
               <h3 className="font-semibold">Market Summary</h3>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               {/* S&P 500 */}
-              <div>
-                <p className="text-xs text-muted-foreground">S&P 500</p>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">Market Index</p>
                 <p className={cn(
                   "text-lg font-mono font-bold",
                   index && index.changePercent >= 0 ? 'text-gain' : 'text-loss'
@@ -119,30 +133,19 @@ export function PostMarketAnalysis({ isOpen, onClose, onRestart, userTrader }: P
                 </p>
               </div>
               
-              {/* Breadth */}
-              <div>
-                <p className="text-xs text-muted-foreground">Market Breadth</p>
-                <p className={cn(
-                  "text-lg font-mono font-bold",
-                  breadth > 50 ? 'text-gain' : 'text-loss'
-                )}>
-                  {breadth.toFixed(0)}% positive
-                </p>
-              </div>
-              
               {/* Session Length */}
-              <div>
+              <div className="text-center">
                 <p className="text-xs text-muted-foreground">Session Length</p>
                 <p className="text-lg font-mono font-bold">
                   {state.simStatus.maxTicks} days
                 </p>
               </div>
               
-              {/* Total Ticks */}
-              <div>
-                <p className="text-xs text-muted-foreground">Data Points</p>
+              {/* Final Index Price */}
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">Final Index</p>
                 <p className="text-lg font-mono font-bold">
-                  {state.simStatus.tickCount}
+                  {state.simulationResults?.marketIndex?.toFixed(2) || index?.price.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -191,6 +194,80 @@ export function PostMarketAnalysis({ isOpen, onClose, onRestart, userTrader }: P
               </div>
             </div>
           </motion.div>
+          
+          {/* Two Leaderboards Side by Side */}
+          {state.simulationResults?.leaderboard && state.simulationResults.leaderboard.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4"
+            >
+              {/* Top 3 by Return % */}
+              <div className="glass-card p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <TrendingUp size={16} className="text-yellow-400" />
+                  <h3 className="font-semibold">Top Return %</h3>
+                </div>
+                
+                <div className="space-y-2">
+                  {topByPnlPct.map((agent, i) => (
+                    <div 
+                      key={agent.id} 
+                      className={cn(
+                        "flex justify-between items-center p-2 rounded-lg",
+                        agent.id === 'my_agent' || agent.type === 'custom' 
+                          ? "bg-primary/20 border border-primary/30" 
+                          : "bg-secondary/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                        </span>
+                        <span className="font-medium text-sm truncate max-w-[120px]">{agent.name}</span>
+                      </div>
+                      <p className={cn("font-mono font-bold", agent.pnl_pct >= 0 ? 'text-gain' : 'text-loss')}>
+                        {agent.pnl_pct >= 0 ? '+' : ''}{agent.pnl_pct.toFixed(2)}%
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Top 3 by Profit $ */}
+              <div className="glass-card p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Crown size={16} className="text-yellow-400" />
+                  <h3 className="font-semibold">Top Profit $</h3>
+                </div>
+                
+                <div className="space-y-2">
+                  {topByProfit.map((agent, i) => (
+                    <div 
+                      key={agent.id} 
+                      className={cn(
+                        "flex justify-between items-center p-2 rounded-lg",
+                        agent.id === 'my_agent' || agent.type === 'custom' 
+                          ? "bg-primary/20 border border-primary/30" 
+                          : "bg-secondary/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                        </span>
+                        <span className="font-medium text-sm truncate max-w-[120px]">{agent.name}</span>
+                      </div>
+                      <p className={cn("font-mono font-bold", agent.pnl >= 0 ? 'text-gain' : 'text-loss')}>
+                        ${agent.pnl >= 0 ? '+' : ''}{agent.pnl.toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
           
           {/* Actions */}
           <motion.div

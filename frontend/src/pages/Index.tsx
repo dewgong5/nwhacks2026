@@ -8,6 +8,7 @@ import { Header } from '@/components/Header';
 import { InstrumentChart } from '@/components/InstrumentChart';
 import { MarketBoard } from '@/components/MarketBoard';
 import { CompactAgentFeed } from '@/components/CompactAgentFeed';
+import { AgentStatusBoard } from '@/components/AgentStatusBoard';
 import { SimulationControls } from '@/components/SimulationControls';
 import { MarketSummary } from '@/components/MarketSummary';
 import { TraderFooter } from '@/components/TraderFooter';
@@ -27,7 +28,8 @@ const Index = () => {
   
   const { state, dispatch } = useMarketStore();
   const { isConnected, isSimulationStarted, startSimulation } = useSimulationControls();
-  const isSessionComplete = state.simStatus.tickCount >= state.simStatus.maxTicks;
+  // Session is complete when we receive simulation_complete from backend
+  const isSessionComplete = state.simulationResults !== undefined;
 
   // Auto-pause when session is complete
   useEffect(() => {
@@ -70,6 +72,7 @@ const Index = () => {
       startSimulation({
         name: trader.name,
         prompt: trader.customPrompt,
+        capital: trader.capital || 100000,
       });
     } else {
       // Start without custom agent
@@ -104,9 +107,13 @@ const Index = () => {
             {/* Simulation Controls */}
             <SimulationControls disabled={isSessionComplete} />
             
-            {/* Agent Activity + Your Trader - Side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ minHeight: '400px', height: '400px' }}>
-              <CompactAgentFeed />
+            {/* Agent Status Board - Directly after chart */}
+            <div className="h-[380px]">
+              <AgentStatusBoard />
+            </div>
+            
+            {/* Your Trader (bob) + Trading Consultant - Side by side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ minHeight: '350px', height: '350px' }}>
               <TraderFooter 
                 userTrader={userTrader} 
                 onJumpIn={handleJumpIn} 
@@ -115,22 +122,23 @@ const Index = () => {
                 onViewAnalysis={handleViewAnalysis}
                 variant="panel"
               />
+              <TradingConsultant />
             </div>
             
             {/* Market Summary Cards */}
             <MarketSummary />
           </div>
 
-          {/* Right Column - Market Board + Chat (30%) */}
+          {/* Right Column - Market Board + Agent Activity (30%) */}
           <div className="lg:w-[30%] space-y-4">
             {/* Market Board */}
             <div className="h-[calc(55vh+70px)] md:h-[calc(55vh+70px)] lg:h-[calc(60vh+70px)]">
               <MarketBoard />
             </div>
             
-            {/* Trading Consultant Chat */}
+            {/* Agent Activity Feed */}
             <div className="h-[400px] md:h-[450px]">
-              <TradingConsultant />
+              <CompactAgentFeed />
             </div>
           </div>
         </div>

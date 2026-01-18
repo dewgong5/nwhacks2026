@@ -22,6 +22,7 @@ export interface TraderResult {
   previousRank: number;
   isUser?: boolean;
   customPrompt?: string; // Custom AI strategy prompt
+  capital?: number; // Starting capital for custom agents
 }
 
 export interface TickData {

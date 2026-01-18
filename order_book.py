@@ -27,12 +27,13 @@ class OrderBook:
     Implements the MarketCore protocol required by SimulationOrchestrator.
     """
     
-    def __init__(self, stock_id: str, initial_price: float = 100.0, price_impact: float = 0.002, volatility: float = 0.0005):
+    def __init__(self, stock_id: str, initial_price: float = 100.0, price_impact: float = 0.002, volatility: float = 0.0005, trend_bias: float = 0.0):
         self.stock_id = stock_id
         self._last_price = initial_price
         self._sequence = 0
         self._price_impact = price_impact  # How much price moves per share traded
         self._volatility = volatility  # Random noise (0.0005 = 0.05%)
+        self._trend_bias = trend_bias  # Per-stock trend: positive = bullish, negative = bearish
         
         # Heaps for price-time priority
         self._bids: list[tuple[float, int, int, str]] = []
@@ -123,6 +124,31 @@ class OrderBook:
     def get_last_price(self) -> float:
         return self._last_price
     
+    def apply_tick_volatility(self, base_volatility: float = 0.02) -> float:
+        """Apply random price movement at the start of each tick.
+        
+        This simulates natural market movement from factors we don't model:
+        - Other traders not in our simulation
+        - Macro events, sentiment shifts
+        - Random walk component of prices
+        
+        Returns the price change percentage.
+        """
+        # Some stocks are more volatile than others (random per stock)
+        stock_volatility = base_volatility * random.uniform(0.8, 2.5)
+        
+        # Random walk with per-stock trend bias
+        # Some stocks are winners (+bias), some are losers (-bias)
+        drift = random.gauss(self._trend_bias, stock_volatility)
+        
+        old_price = self._last_price
+        self._last_price = self._last_price * (1 + drift)
+        
+        # Prevent negative prices
+        self._last_price = max(self._last_price, 0.01)
+        
+        return (self._last_price - old_price) / old_price * 100  # Return % change
+    
     def get_best_bid(self) -> float | None:
         return -self._bids[0][0] if self._bids else None
     
@@ -154,9 +180,35 @@ def create_order_books(
     price_impact: float = 0.002,
     volatility: float = 0.0005  # 0.05% random noise
 ) -> dict[str, OrderBook]:
-    """Create OrderBook instances for multiple stocks."""
+    """Create OrderBook instances for multiple stocks.
+    
+    Each stock gets a random trend bias:
+    - ~40% stocks are bullish (go up)
+    - ~40% stocks are bearish (go down)
+    - ~20% stocks are neutral (random walk)
+    """
     initial_prices = initial_prices or {}
-    return {
-        stock_id: OrderBook(stock_id, initial_prices.get(stock_id, 100.0), price_impact, volatility)
-        for stock_id in stock_ids
-    }
+    books = {}
+    
+    for stock_id in stock_ids:
+        # Assign random trend: some winners, some losers
+        trend_roll = random.random()
+        if trend_roll < 0.4:
+            # Bullish stock: +0.5% to +2% per tick
+            trend_bias = random.uniform(0.005, 0.02)
+        elif trend_roll < 0.8:
+            # Bearish stock: -0.5% to -2% per tick  
+            trend_bias = random.uniform(-0.02, -0.005)
+        else:
+            # Neutral: random walk
+            trend_bias = 0.0
+        
+        books[stock_id] = OrderBook(
+            stock_id, 
+            initial_prices.get(stock_id, 100.0), 
+            price_impact, 
+            volatility,
+            trend_bias
+        )
+    
+    return books

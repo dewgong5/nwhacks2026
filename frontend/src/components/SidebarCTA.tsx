@@ -74,25 +74,25 @@ export function SidebarCTA({ userTrader, onJumpIn, onAdjust }: SidebarCTAProps) 
       <div className="relative">
         <div className="flex items-center gap-2 mb-4">
           <Sparkles className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-lg">Ready to Compete?</h3>
+          <h3 className="font-semibold text-lg">Think You Can Beat Wall Street?</h3>
         </div>
         
         <p className="text-sm text-muted-foreground mb-6">
-          Build a custom AI trader profile and watch it compete against the best algorithms in real-time.
+          Write a trading strategy in plain English. Your AI agent will go head-to-head with Citadel, Jane Street, and more.
         </p>
 
         <div className="space-y-3 mb-6">
           <div className="flex items-center gap-2 text-sm">
             <TrendingUp className="h-4 w-4 text-gain" />
-            <span>Track live PnL against rivals</span>
+            <span>Real-time P&L tracking</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Zap className="h-4 w-4 text-yellow-400" />
-            <span>Customize strategy & risk</span>
+            <span>You write the rules</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Rocket className="h-4 w-4 text-trader-custom" />
-            <span>AI-powered decision making</span>
+            <span>Compete vs. the big dogs</span>
           </div>
         </div>
 

@@ -12,6 +12,7 @@ import uvicorn
 from orchestration import SimulationOrchestrator, Side
 from order_book import create_order_books
 from agents import create_agent, DumbRetailHolder, DumbRetailDaytrader
+from news_events import NewsGenerator
 
 # Try to import custom agent, but don't fail if it has issues
 try:
@@ -94,7 +95,7 @@ async def broadcast(message: dict):
 
 
 async def run_simulation_streaming(
-    num_ticks: int = 20, 
+    num_ticks: int = 5, 
     tick_delay: float = 1.0,
     custom_agent_config: dict = None
 ):
@@ -106,6 +107,7 @@ async def run_simulation_streaming(
         custom_agent_config: Optional config for custom agent:
             - name: Display name for the agent
             - prompt: Custom system prompt for trading strategy
+            - capital: Starting capital (default: 100000)
     """
     
     # Load stocks
@@ -116,7 +118,16 @@ async def run_simulation_streaming(
     
     # Setup orchestrator
     orchestrator = SimulationOrchestrator()
-    order_books = create_order_books(tickers, initial_prices, price_impact=0.0075, volatility=0.02)
+    order_books = create_order_books(tickers, initial_prices, price_impact=0.001, volatility=0.04)
+    
+    # Log which stocks are winners/losers
+    print("\n📊 Stock Trends for this simulation:")
+    bulls = [t for t, b in order_books.items() if b._trend_bias > 0.005]
+    bears = [t for t, b in order_books.items() if b._trend_bias < -0.005]
+    neutral = [t for t, b in order_books.items() if -0.005 <= b._trend_bias <= 0.005]
+    print(f"  📈 BULLISH ({len(bulls)}): {', '.join(bulls[:8])}{'...' if len(bulls) > 8 else ''}")
+    print(f"  📉 BEARISH ({len(bears)}): {', '.join(bears[:8])}{'...' if len(bears) > 8 else ''}")
+    print(f"  ➡️  NEUTRAL ({len(neutral)}): {', '.join(neutral[:5])}{'...' if len(neutral) > 5 else ''}")
     
     for ticker, book in order_books.items():
         orchestrator.register_stock(ticker, book)
@@ -131,22 +142,54 @@ async def run_simulation_streaming(
     orchestrator.register_agent("retail_3", initial_cash=50000.0)
     orchestrator.register_agent("retail_4", initial_cash=50000.0)
     orchestrator.register_agent("retail_daytrader", initial_cash=50000.0)
-    orchestrator.register_agent("my_agent", initial_cash=100000.0)  # Custom agent
+    
+    # Custom agent - use capital from config if provided, default to $100k
+    custom_capital = 100000.0
+    if custom_agent_config and custom_agent_config.get("capital"):
+        custom_capital = float(custom_agent_config["capital"])
+    orchestrator.register_agent("my_agent", initial_cash=custom_capital)
+    print(f"   💰 Custom agent capital: ${custom_capital:,.0f}")
+    
     orchestrator.register_agent("market_maker", initial_cash=10000000.0)
     
-    # Give starting shares
+    # Categorize stocks by trend
+    bullish_stocks = [t for t, b in order_books.items() if b._trend_bias > 0.003]
+    bearish_stocks = [t for t, b in order_books.items() if b._trend_bias < -0.003]
+    neutral_stocks = [t for t, b in order_books.items() if -0.003 <= b._trend_bias <= 0.003]
+    
+    # Give starting shares - institutions get ALL stocks
     for ticker in tickers:
         orchestrator._agent_portfolios["citadel"].positions[ticker] = 200
         orchestrator._agent_portfolios["jane_street"].positions[ticker] = 200
         orchestrator._agent_portfolios["blackrock"].positions[ticker] = 100
         orchestrator._agent_portfolios["vanguard"].positions[ticker] = 100
-        orchestrator._agent_portfolios["retail_1"].positions[ticker] = 10
-        orchestrator._agent_portfolios["retail_2"].positions[ticker] = 10
-        orchestrator._agent_portfolios["retail_3"].positions[ticker] = 10
-        orchestrator._agent_portfolios["retail_4"].positions[ticker] = 10
-        orchestrator._agent_portfolios["retail_daytrader"].positions[ticker] = 10
-        orchestrator._agent_portfolios["my_agent"].positions[ticker] = 50  # Custom agent
         orchestrator._agent_portfolios["market_maker"].positions[ticker] = 2000
+    
+    # Retail 1 & 2: Get BEARISH stocks (bad luck, will lose)
+    for ticker in bearish_stocks[:15]:  # Up to 15 bearish stocks
+        orchestrator._agent_portfolios["retail_1"].positions[ticker] = 15
+        orchestrator._agent_portfolios["retail_2"].positions[ticker] = 15
+    
+    # Retail 3 & 4: Get BULLISH stocks (lucky, will win)
+    for ticker in bullish_stocks[:15]:  # Up to 15 bullish stocks
+        orchestrator._agent_portfolios["retail_3"].positions[ticker] = 15
+        orchestrator._agent_portfolios["retail_4"].positions[ticker] = 15
+    
+    # Daytrader: Mixed bag (random outcome)
+    import random
+    mixed_stocks = random.sample(tickers, min(20, len(tickers)))
+    for ticker in mixed_stocks:
+        orchestrator._agent_portfolios["retail_daytrader"].positions[ticker] = 10
+    
+    # Custom agent: Gets balanced mix
+    for ticker in (bullish_stocks[:8] + bearish_stocks[:8] + neutral_stocks[:4]):
+        orchestrator._agent_portfolios["my_agent"].positions[ticker] = 25
+    
+    print(f"\n👥 Retail Stock Assignments:")
+    print(f"  📉 Retail 1 & 2: {len(bearish_stocks[:15])} bearish stocks (will likely LOSE)")
+    print(f"  📈 Retail 3 & 4: {len(bullish_stocks[:15])} bullish stocks (will likely WIN)")
+    print(f"  🎲 Daytrader: {len(mixed_stocks)} mixed stocks (random)")
+    print(f"  🎮 Your Agent: balanced mix")
     
     # Create agents
     MODEL = "google/gemini-2.0-flash-001"
@@ -197,6 +240,9 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
     # Send simulation start
     await broadcast({"price": 100.0})
     
+    # Initialize news generator
+    news_generator = NewsGenerator(tickers, news_probability=0.20)  # 20% chance per tick
+    
     SPREAD_PCT = 0.002
     MM_SIZE = 100
     
@@ -206,22 +252,113 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         print(f"TICK {tick}")
         print("=" * 80)
         
-        # Market Maker posts quotes
+        # Apply random price fluctuations to ALL stocks at start of tick
+        # This simulates natural market movement (other traders, sentiment, macro events)
+        
+        # One bear market crash on tick 2 (Day 3)
+        is_crash_tick = (tick == 2)
+        
+        if is_crash_tick:
+            print("\n🐻 BEAR MARKET DAY! 📉")
+            await broadcast({
+                "type": "news",
+                "headline": "🐻 Markets tumble on recession fears",
+                "stock": "ALL",
+                "sentiment": "negative",
+                "tick": tick
+            })
+            await asyncio.sleep(0.3)
+        else:
+            print("\n📊 Market Movement:")
+        
+        big_movers = []
+        for ticker in tickers:
+            if is_crash_tick:
+                # Bear day - 8-18% down
+                import random
+                crash_pct = random.uniform(-0.18, -0.08)
+                order_books[ticker]._last_price *= (1 + crash_pct)
+                pct_change = crash_pct * 100
+            else:
+                # Normal volatility - BEARISH baseline (-1.5% mean drift)
+                pct_change = order_books[ticker].apply_tick_volatility(base_volatility=0.03)
+            
+            if abs(pct_change) > 1.0:  # Only log big moves (>1%)
+                direction = "📈" if pct_change > 0 else "📉"
+                big_movers.append(f"  {direction} {ticker}: {pct_change:+.1f}%")
+        
+        if big_movers:
+            for mover in big_movers[:5]:  # Show top 5 big movers
+                print(mover)
+        else:
+            print("  (quiet market)")
+        
+        # Market Maker posts quotes first
         for ticker in tickers:
             last_price = order_books[ticker].get_last_price()
             spread = last_price * SPREAD_PCT
             orchestrator.submit_order("market_maker", ticker, Side.BUY, round(last_price - spread/2, 2), MM_SIZE)
             orchestrator.submit_order("market_maker", ticker, Side.SELL, round(last_price + spread/2, 2), MM_SIZE)
         
+        # Generate news event RIGHT BEFORE agents start (guaranteed on tick 0, 40% chance after)
+        if tick == 0:
+            # Force news on first tick for dramatic opening
+            old_prob = news_generator.news_probability
+            news_generator.news_probability = 1.0
+            news_event = news_generator.maybe_generate_news(tick)
+            news_generator.news_probability = old_prob
+            print(f"   🎯 Tick 0 forced news: {news_event}")
+        else:
+            news_event = news_generator.maybe_generate_news(tick)
+            print(f"   🎲 Random news check: {news_event is not None}")
+        
+        if news_event:
+            print(f"\n📰 NEWS: {news_event.headline}")
+            print(f"   Stock: {news_event.stock}, Sentiment: {'📈' if news_event.sentiment > 0 else '📉'}")
+            
+            # Broadcast news to frontend IMMEDIATELY
+            news_payload = {
+                "type": "news",
+                "headline": news_event.headline,
+                "stock": news_event.stock,
+                "sentiment": "positive" if news_event.sentiment > 0 else "negative",
+                "tick": tick
+            }
+            print(f"   📡 Broadcasting news: {news_payload}")
+            await broadcast(news_payload)
+            await asyncio.sleep(0.5)  # Longer pause so news REALLY stands out
+            
+            # Apply immediate price impact from news
+            impact = news_event.sentiment * news_event.magnitude * 0.03  # Up to 3% move
+            old_price = order_books[news_event.stock].get_last_price()
+            order_books[news_event.stock]._last_price *= (1 + impact)
+            new_price = order_books[news_event.stock].get_last_price()
+            print(f"   Price impact: ${old_price:.2f} → ${new_price:.2f} ({impact*100:+.1f}%)")
+        
+        # Prepare news dict for agents (if news happened this tick)
+        current_news = None
+        if news_event:
+            current_news = {
+                "headline": news_event.headline,
+                "stock": news_event.stock,
+                "sentiment": "positive" if news_event.sentiment > 0 else "negative",
+            }
+        
         # LLM agents decide (institutional) - STREAM EVENTS IMMEDIATELY
+        # Quants see news IMMEDIATELY, fundamentals see it 1 tick later
         llm_agents = [
-            (citadel, "CITADEL", "🏦"), (jane_street, "JANE STREET", "🏦"),
-            (blackrock, "BLACKROCK", "📊"), (vanguard, "VANGUARD", "📊")
+            (citadel, "CITADEL", "🏦", "quant"), (jane_street, "JANE STREET", "🏦", "quant"),
+            (blackrock, "BLACKROCK", "📊", "fundamental"), (vanguard, "VANGUARD", "📊", "fundamental")
         ]
-        for agent, name, emoji in llm_agents:
+        for agent, name, emoji, agent_type in llm_agents:
             print(f"\n[{emoji} {name} thinking...]")
             try:
-                actions = agent.decide(tick)
+                # Quants see news immediately, fundamentals don't (they analyze first)
+                news_for_agent = current_news if agent_type == "quant" else None
+                if news_for_agent:
+                    print(f"  📰 {name} sees breaking news about {news_for_agent['stock']}!")
+                
+                actions = agent.decide(tick, news=news_for_agent)
                 trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
                 if trades:
                     for action in trades:
@@ -263,10 +400,14 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                 print("  (holding)")
         
         # Custom agent decides - STREAM EVENTS WITH DELAY
+        # Custom agent sees news (like retail, slight delay but still sees it)
         if my_agent:
             print(f"\n[🎮 {my_agent_name} thinking...]")
             try:
-                actions = my_agent.decide(tick)
+                # Custom agents see news (so users can see their agent react)
+                if current_news:
+                    print(f"  📰 {my_agent_name} sees breaking news about {current_news['stock']}!")
+                actions = my_agent.decide(tick, news=current_news)
                 trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
                 if trades:
                     for action in trades:
@@ -296,16 +437,92 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         print(f"\n📈 Trades executed: {len(tick_log.trades)}")
         print(f"📊 Market Index: {market_index:.2f} ({market_index - 100:+.2f}%)")
         
-        # BROADCAST: Price after all events
-        await broadcast({"price": round(market_index, 2)})
+        # Calculate portfolio values for all agents
+        portfolio_values = {}
+        for agent_id in all_agents:
+            p = orchestrator.get_agent_portfolio(agent_id)
+            if p:
+                # Portfolio value = cash + market value of all positions
+                stock_value = sum(p.positions.get(t, 0) * current_prices.get(t, 0) for t in tickers)
+                total_value = p.cash + stock_value
+                start_val = start_values.get(agent_id, total_value)
+                pnl_pct = ((total_value - start_val) / start_val) * 100 if start_val > 0 else 0
+                portfolio_values[agent_id] = {
+                    "value": round(total_value, 2),
+                    "pnl": round(total_value - start_val, 2),
+                    "pnl_pct": round(pnl_pct, 2)
+                }
+        
+        # BROADCAST: Price, tick, and portfolio values
+        await broadcast({
+            "price": round(market_index, 2), 
+            "tick": tick,
+            "portfolios": portfolio_values
+        })
         
         # Wait before next tick
         await asyncio.sleep(tick_delay)
     
-    # Simulation complete
+    # Simulation complete - calculate final P&L for all agents
     print(f"\nFinal price: {market_index:.2f}")
     
+    final_results = []
+    agent_display_names = {
+        "citadel": "Citadel Securities",
+        "jane_street": "Jane Street",
+        "blackrock": "BlackRock",
+        "vanguard": "Vanguard",
+        "retail_1": "Retail Holder 1",
+        "retail_2": "Retail Holder 2",
+        "retail_3": "Retail Holder 3",
+        "retail_4": "Retail Holder 4",
+        "retail_daytrader": "Retail Daytrader",
+        "my_agent": my_agent_name,
+    }
+    agent_types = {
+        "citadel": "quant", "jane_street": "quant",
+        "blackrock": "institutional", "vanguard": "institutional",
+        "retail_1": "retail", "retail_2": "retail",
+        "retail_3": "retail", "retail_4": "retail",
+        "retail_daytrader": "retail",
+        "my_agent": "custom",
+    }
+    
+    for agent_id in all_agents:
+        p = orchestrator.get_agent_portfolio(agent_id)
+        final_value = p.cash + sum(p.positions.get(t, 0) * current_prices[t] for t in tickers)
+        start_value = start_values[agent_id]
+        pnl = final_value - start_value
+        pnl_pct = (pnl / start_value) * 100 if start_value > 0 else 0
+        
+        final_results.append({
+            "id": agent_id,
+            "name": agent_display_names.get(agent_id, agent_id),
+            "type": agent_types.get(agent_id, "unknown"),
+            "start_value": round(start_value, 2),
+            "final_value": round(final_value, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round(pnl_pct, 2),
+        })
+    
+    # Sort by P&L %
+    final_results.sort(key=lambda x: x["pnl_pct"], reverse=True)
+    
+    # Add ranks
+    for i, result in enumerate(final_results):
+        result["rank"] = i + 1
+    
+    # Broadcast simulation complete with results
+    await broadcast({
+        "type": "simulation_complete",
+        "market_index": round(market_index, 2),
+        "leaderboard": final_results,
+    })
+    
     print("\n=== SIMULATION COMPLETE ===")
+    print("🏆 LEADERBOARD:")
+    for r in final_results:
+        print(f"  #{r['rank']} {r['name']}: {r['pnl_pct']:+.2f}% (${r['pnl']:+,.2f})")
 
 
 # Store the simulation task
@@ -334,7 +551,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Handle client commands
                 if data.get("command") == "start_simulation":
                     global simulation_task
-                    num_ticks = data.get("num_ticks", 20)
+                    num_ticks = data.get("num_ticks", 5)
                     tick_delay = data.get("tick_delay", 1.0)
                     
                     # Extract custom agent config if provided
@@ -379,7 +596,7 @@ async def root():
 
 
 @app.post("/start")
-async def start_simulation(num_ticks: int = 20, tick_delay: float = 1.0):
+async def start_simulation(num_ticks: int = 5, tick_delay: float = 1.0):
     """REST endpoint to start simulation (for testing)."""
     global simulation_task
     

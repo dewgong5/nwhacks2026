@@ -133,9 +133,9 @@ export function TraderFooter({
             <Sparkles className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-semibold text-lg">Ready to Compete?</h3>
+            <h3 className="font-semibold text-lg">Think You Can Beat Wall Street?</h3>
             <p className="text-sm text-muted-foreground">
-              Build a custom AI trader
+              Write a prompt. Watch it trade.
             </p>
           </div>
         </div>
@@ -147,15 +147,15 @@ export function TraderFooter({
         )}>
           <div className="flex items-center gap-2 text-sm">
             <TrendingUp className="h-4 w-4 text-gain shrink-0" />
-            <span>Live PnL tracking</span>
+            <span>Real-time P&L</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Zap className="h-4 w-4 text-yellow-400 shrink-0" />
-            <span>Custom strategy</span>
+            <span>You write the rules</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Rocket className="h-4 w-4 text-trader-custom shrink-0" />
-            <span>AI-powered</span>
+            <span>Compete vs. Citadel & friends</span>
           </div>
         </div>
 

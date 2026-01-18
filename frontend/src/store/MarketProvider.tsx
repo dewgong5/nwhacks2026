@@ -19,7 +19,7 @@ interface MarketProviderProps {
 interface SimulationControlsContextValue {
   isConnected: boolean;
   isSimulationStarted: boolean;
-  startSimulation: (customAgent?: { name: string; prompt: string }) => boolean;
+  startSimulation: (customAgent?: { name: string; prompt: string; capital?: number }) => boolean;
 }
 
 const SimulationControlsContext = createContext<SimulationControlsContextValue | null>(null);

@@ -87,13 +87,41 @@ export interface AgentActivityPayload {
   action: 'increased' | 'decreased' | 'entered' | 'exited' | 'rebalanced';
   target: string; // Sector name or "overall market"
   summary: string; // Human-readable summary
+  isNews?: boolean; // True if this is a news event (special styling)
+  sentiment?: 'positive' | 'negative'; // For news events
+}
+
+// Agent portfolio value (real-time during simulation)
+export interface AgentPortfolioValue {
+  value: number;
+  pnl: number;
+  pnl_pct: number;
+}
+
+// Agent result for end-of-simulation leaderboard
+export interface AgentResult {
+  id: string;
+  name: string;
+  type: 'quant' | 'institutional' | 'retail' | 'custom' | 'unknown';
+  start_value: number;
+  final_value: number;
+  pnl: number;
+  pnl_pct: number;
+  rank: number;
+}
+
+export interface SimulationCompletePayload {
+  marketIndex: number;
+  leaderboard: AgentResult[];
 }
 
 export type MarketEvent =
   | { type: 'INDEX_TICK'; payload: IndexTickPayload }
   | { type: 'SECTOR_TICK'; payload: SectorTickPayload }
   | { type: 'SIM_STATUS'; payload: SimStatusPayload }
-  | { type: 'AGENT_ACTIVITY'; payload: AgentActivityPayload };
+  | { type: 'AGENT_ACTIVITY'; payload: AgentActivityPayload }
+  | { type: 'SIMULATION_COMPLETE'; payload: SimulationCompletePayload }
+  | { type: 'PORTFOLIO_UPDATE'; payload: Record<string, AgentPortfolioValue> };
 
 // ============================================
 // MARKET STORE STATE
@@ -127,8 +155,17 @@ export interface MarketStore {
   // Agent activity feed
   agentActivities: AgentActivityPayload[];
   
+  // Real-time agent portfolio values
+  agentPortfolios: Record<string, AgentPortfolioValue>;
+  
   // Subscriptions (for future WebSocket)
   subscribedInstruments: Set<string>;
+  
+  // End-of-simulation results
+  simulationResults?: {
+    marketIndex: number;
+    leaderboard: AgentResult[];
+  };
 }
 
 // ============================================
