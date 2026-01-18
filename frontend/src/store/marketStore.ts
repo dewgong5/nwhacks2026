@@ -71,13 +71,17 @@ export function createInitialState(): MarketStore {
     tickHistory,
     activeInstrumentId: 'SP500',
     simStatus: {
-      running: true,
+      running: false,  // Start paused until simulation begins
       speed: 'normal',
       tickCount: 0,
       maxTicks: 5,
     },
     agentActivities: [],
     agentPortfolios: {},
+    topMovers: {
+      gainers: [],
+      losers: [],
+    },
     subscribedInstruments,
   };
 }
@@ -218,6 +222,7 @@ export function marketReducer(state: MarketStore, action: MarketAction): MarketS
             simStatus: {
               ...state.simStatus,
               running: false,  // Stop the simulation
+              tickCount: state.simStatus.maxTicks - 1,  // Set to final tick (0-indexed)
             },
             simulationResults: {
               marketIndex: event.payload.marketIndex,
@@ -230,6 +235,16 @@ export function marketReducer(state: MarketStore, action: MarketAction): MarketS
           return {
             ...state,
             agentPortfolios: event.payload,
+          };
+        }
+        
+        case 'TOP_MOVERS_UPDATE': {
+          return {
+            ...state,
+            topMovers: {
+              gainers: event.payload.gainers,
+              losers: event.payload.losers,
+            },
           };
         }
       }
@@ -333,6 +348,8 @@ export const selectAgentActivities = (state: MarketStore, count?: number): Agent
   count !== undefined ? state.agentActivities.slice(0, count) : state.agentActivities;
 
 export const selectAgentPortfolios = (state: MarketStore) => state.agentPortfolios;
+
+export const selectTopMovers = (state: MarketStore) => state.topMovers;
 
 export const selectIsRunning = (state: MarketStore): boolean => 
   state.simStatus.running;

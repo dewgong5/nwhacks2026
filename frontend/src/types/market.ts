@@ -98,6 +98,13 @@ export interface AgentPortfolioValue {
   pnl_pct: number;
 }
 
+// Stock mover (gainer or loser)
+export interface StockMover {
+  ticker: string;
+  price: number;
+  change: number;  // percent change
+}
+
 // Agent result for end-of-simulation leaderboard
 export interface AgentResult {
   id: string;
@@ -115,13 +122,19 @@ export interface SimulationCompletePayload {
   leaderboard: AgentResult[];
 }
 
+export interface TopMoversPayload {
+  gainers: StockMover[];
+  losers: StockMover[];
+}
+
 export type MarketEvent =
   | { type: 'INDEX_TICK'; payload: IndexTickPayload }
   | { type: 'SECTOR_TICK'; payload: SectorTickPayload }
   | { type: 'SIM_STATUS'; payload: SimStatusPayload }
   | { type: 'AGENT_ACTIVITY'; payload: AgentActivityPayload }
   | { type: 'SIMULATION_COMPLETE'; payload: SimulationCompletePayload }
-  | { type: 'PORTFOLIO_UPDATE'; payload: Record<string, AgentPortfolioValue> };
+  | { type: 'PORTFOLIO_UPDATE'; payload: Record<string, AgentPortfolioValue> }
+  | { type: 'TOP_MOVERS_UPDATE'; payload: TopMoversPayload };
 
 // ============================================
 // MARKET STORE STATE
@@ -157,6 +170,12 @@ export interface MarketStore {
   
   // Real-time agent portfolio values
   agentPortfolios: Record<string, AgentPortfolioValue>;
+  
+  // Top movers (gainers and losers)
+  topMovers: {
+    gainers: StockMover[];
+    losers: StockMover[];
+  };
   
   // Subscriptions (for future WebSocket)
   subscribedInstruments: Set<string>;

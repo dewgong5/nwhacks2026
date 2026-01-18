@@ -51,24 +51,19 @@ export function TraderFooter({
             </div>
           </div>
 
-          {/* Stats */}
+          {/* Trading Status */}
           <div className={cn(
-            "flex items-center gap-6",
-            isPanel && "w-full justify-around py-2 border-y border-border/50"
+            "flex items-center gap-3",
+            isPanel && "w-full py-4 border-y border-border/50"
           )}>
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground">Rank</p>
-              <p className="text-xl font-bold text-primary">#{userTrader.rank}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground">PnL</p>
-              <p className={cn(
-                "text-xl font-mono font-bold",
-                userTrader.currentPnL >= 0 ? 'text-gain' : 'text-loss'
-              )}>
-                {userTrader.currentPnL >= 0 ? '+' : ''}${Math.abs(userTrader.currentPnL).toLocaleString()}
-              </p>
-            </div>
+            <motion.div
+              className="w-3 h-3 rounded-full bg-gain"
+              animate={{ opacity: [1, 0.4, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            />
+            <p className="text-lg font-medium">
+              <span className="text-primary">{userTrader.name}</span> is trading...
+            </p>
           </div>
 
           {/* Spacer for footer mode */}

@@ -95,11 +95,11 @@ export function SimulationControls({ disabled = false }: SimulationControlsProps
         {/* Timeline scrubber */}
         <div className="flex-1 flex items-center gap-3 min-w-[200px]">
           <span className="text-xs font-mono text-muted-foreground tabular-nums">
-            Day {state.simStatus.tickCount}
+            Day {state.simStatus.tickCount + 1}
           </span>
           <Slider
             value={[state.simStatus.tickCount]}
-            max={state.simStatus.maxTicks}
+            max={state.simStatus.maxTicks - 1}
             step={1}
             onValueChange={handleSeek}
             className="flex-1"

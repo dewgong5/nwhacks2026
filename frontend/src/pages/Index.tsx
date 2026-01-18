@@ -10,7 +10,6 @@ import { MarketBoard } from '@/components/MarketBoard';
 import { CompactAgentFeed } from '@/components/CompactAgentFeed';
 import { AgentStatusBoard } from '@/components/AgentStatusBoard';
 import { SimulationControls } from '@/components/SimulationControls';
-import { MarketSummary } from '@/components/MarketSummary';
 import { TraderFooter } from '@/components/TraderFooter';
 import { ProfileBuilder } from '@/components/ProfileBuilder';
 import { PerformanceCelebration } from '@/components/PerformanceCelebration';
@@ -113,7 +112,7 @@ const Index = () => {
             </div>
             
             {/* Your Trader (bob) + Trading Consultant - Side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ minHeight: '350px', height: '350px' }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ minHeight: '450px', height: '450px' }}>
               <TraderFooter 
                 userTrader={userTrader} 
                 onJumpIn={handleJumpIn} 
@@ -122,11 +121,8 @@ const Index = () => {
                 onViewAnalysis={handleViewAnalysis}
                 variant="panel"
               />
-              <TradingConsultant />
+              <TradingConsultant className="h-full" />
             </div>
-            
-            {/* Market Summary Cards */}
-            <MarketSummary />
           </div>
 
           {/* Right Column - Market Board + Agent Activity (30%) */}

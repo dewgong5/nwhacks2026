@@ -34,23 +34,28 @@ CUSTOM_AGENT_CASH = 100000.0  # Starting cash for your agent
 CUSTOM_AGENT_SHARES = 50     # Starting shares per stock
 
 
-def load_stocks(csv_path="stocks.csv"):
-    """Load stocks from CSV file with historical prices."""
+def load_stocks(csv_path="stocks_sp500.csv"):
+    """Load stocks from CSV file (S&P 500 data with 12 monthly prices)."""
+    from pathlib import Path
+    
+    csv_full_path = Path(__file__).parent / csv_path
+    
     stocks = []
-    with open(csv_path, 'r') as f:
+    with open(csv_full_path, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # Build history from 12 monthly prices (oldest to newest)
+            history = []
+            for i in range(12, 0, -1):
+                price_key = f"price_{i}"
+                if price_key in row:
+                    history.append(float(row[price_key]))
+            
             stocks.append({
                 "ticker": row["ticker"],
                 "name": row["name"],
                 "sector": row["sector"],
-                "history": [
-                    float(row["price_5"]),
-                    float(row["price_4"]),
-                    float(row["price_3"]),
-                    float(row["price_2"]),
-                    float(row["price_1"]),
-                ],
+                "history": history,  # 12 monthly prices
                 "current_price": float(row["current_price"])
             })
     return stocks

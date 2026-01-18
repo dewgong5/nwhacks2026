@@ -36,25 +36,40 @@ app.add_middleware(
 # Connected WebSocket clients
 connected_clients: Set[WebSocket] = set()
 
+# Global market state for chat context
+current_market_state = {
+    "market_index": 100.0,
+    "top_gainers": [],
+    "top_losers": [],
+    "tick": 0,
+    "is_running": False,
+}
 
-def load_stocks(csv_path="stocks.csv"):
-    """Load stocks from CSV file."""
+
+def load_stocks(csv_path="stocks_sp500.csv"):
+    """Load stocks from CSV file (S&P 500 data with 12 monthly prices)."""
     import csv
+    from pathlib import Path
+    
+    # Get path relative to this file
+    csv_full_path = Path(__file__).parent / csv_path
+    
     stocks = []
-    with open(csv_path, 'r') as f:
+    with open(csv_full_path, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
+            # Build history from 12 monthly prices (oldest to newest)
+            history = []
+            for i in range(12, 0, -1):
+                price_key = f"price_{i}"
+                if price_key in row:
+                    history.append(float(row[price_key]))
+            
             stocks.append({
                 "ticker": row["ticker"],
                 "name": row["name"],
                 "sector": row["sector"],
-                "history": [
-                    float(row["price_5"]),
-                    float(row["price_4"]),
-                    float(row["price_3"]),
-                    float(row["price_2"]),
-                    float(row["price_1"]),
-                ],
+                "history": history,  # 12 monthly prices
                 "current_price": float(row["current_price"])
             })
     return stocks
@@ -109,6 +124,7 @@ async def run_simulation_streaming(
             - prompt: Custom system prompt for trading strategy
             - capital: Starting capital (default: 100000)
     """
+    global current_market_state
     
     # Load stocks
     stock_data = load_stocks()
@@ -241,7 +257,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
     await broadcast({"price": 100.0})
     
     # Initialize news generator
-    news_generator = NewsGenerator(tickers, news_probability=0.20)  # 20% chance per tick
+    news_generator = NewsGenerator(tickers, news_probability=0.10)  # 10% chance per tick (less frequent)
     
     SPREAD_PCT = 0.002
     MM_SIZE = 100
@@ -453,11 +469,38 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                     "pnl_pct": round(pnl_pct, 2)
                 }
         
-        # BROADCAST: Price, tick, and portfolio values
+        # Calculate top movers (gainers and losers)
+        all_movers = []
+        for ticker in tickers:
+            curr_price = current_prices[ticker]
+            init_price = initial_prices[ticker]
+            pct_change = ((curr_price - init_price) / init_price) * 100
+            all_movers.append({
+                "ticker": ticker,
+                "price": round(curr_price, 2),
+                "change": round(pct_change, 2)
+            })
+        
+        # Sort and get top 5 gainers and losers
+        gainers = sorted([m for m in all_movers if m["change"] > 0], key=lambda x: -x["change"])[:5]
+        losers = sorted([m for m in all_movers if m["change"] < 0], key=lambda x: x["change"])[:5]
+        
+        # Update global market state for chat context
+        current_market_state = {
+            "market_index": round(market_index, 2),
+            "top_gainers": gainers[:5],
+            "top_losers": losers[:5],
+            "tick": tick + 1,  # 1-indexed for display
+            "is_running": True,
+        }
+        
+        # BROADCAST: Price, tick, portfolio values, and top movers
         await broadcast({
             "price": round(market_index, 2), 
             "tick": tick,
-            "portfolios": portfolio_values
+            "portfolios": portfolio_values,
+            "top_gainers": gainers,
+            "top_losers": losers
         })
         
         # Wait before next tick
@@ -511,6 +554,9 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
     # Add ranks
     for i, result in enumerate(final_results):
         result["rank"] = i + 1
+    
+    # Update global state - simulation ended
+    current_market_state["is_running"] = False
     
     # Broadcast simulation complete with results
     await broadcast({
@@ -610,6 +656,201 @@ async def start_simulation(num_ticks: int = 5, tick_delay: float = 1.0):
     return {"message": "Simulation started", "num_ticks": num_ticks}
 
 
+# ============================================
+# CHAT API ENDPOINT (Gemini-powered Trading Consultant)
+# ============================================
+
+import requests as http_requests
+from pydantic import BaseModel
+from typing import Optional, List
+
+# Gemini API key and client
+GEMINI_API_KEY = "AIzaSyDKFwcogxxhLuqOo7syAYSSqVqnGDi2A6A"
+
+# Initialize Gemini client for chatbot ONLY (agents use OpenRouter)
+from google import genai
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+GEMINI_AVAILABLE = True
+print("✅ Chatbot using Gemini API (gemini-3-flash-preview)")
+
+# Trading consultant system prompt
+TRADING_CONSULTANT_PROMPT = """You are a trading consultant AI in a STOCK MARKET SIMULATION GAME. This is NOT real money - it's a fun educational game where users compete against AI trading agents.
+
+Your role:
+- Help users understand what's happening in the simulated market
+- Explain which stocks are up/down and why that might be
+- Give trading tips and strategies for the GAME
+- Be enthusiastic and engaging like a sports commentator
+- Comment on how the AI agents (Citadel, Jane Street, BlackRock, etc.) are performing
+
+IMPORTANT: This is a GAME with FAKE money. No financial disclaimers needed! Be direct, give opinions, make predictions, have fun with it. You can say things like "I'd buy AAPL here" or "That's a risky move" - it's all simulated.
+
+Keep responses concise and punchy. Use emojis occasionally. Be like a helpful co-pilot in a trading game."""
+
+class ChatMessageInput(BaseModel):
+    message: str
+    history: Optional[List[dict]] = None
+
+class ChatResponse(BaseModel):
+    message: str
+
+
+# ============================================
+# CHATBOT TOOLS - Functions Gemini can call
+# ============================================
+
+def get_market_overview() -> dict:
+    """Get current market index and overall status."""
+    return {
+        "market_index": current_market_state["market_index"],
+        "change_from_start": round(current_market_state["market_index"] - 100, 2),
+        "day": current_market_state["tick"],
+        "is_running": current_market_state["is_running"],
+        "status": "Simulation Running" if current_market_state["is_running"] else "Simulation Complete"
+    }
+
+def get_top_gainers() -> list:
+    """Get the top performing stocks (biggest gainers)."""
+    return current_market_state["top_gainers"]
+
+def get_top_losers() -> list:
+    """Get the worst performing stocks (biggest losers)."""
+    return current_market_state["top_losers"]
+
+def get_stock_price(ticker: str) -> dict:
+    """Get current price and change for a specific stock ticker."""
+    ticker = ticker.upper()
+    # Check gainers
+    for stock in current_market_state["top_gainers"]:
+        if stock["ticker"] == ticker:
+            return {"ticker": ticker, "price": stock["price"], "change_pct": stock["change"], "status": "gainer"}
+    # Check losers
+    for stock in current_market_state["top_losers"]:
+        if stock["ticker"] == ticker:
+            return {"ticker": ticker, "price": stock["price"], "change_pct": stock["change"], "status": "loser"}
+    return {"ticker": ticker, "error": "Stock not in top movers. Try get_top_gainers or get_top_losers to see available stocks."}
+
+
+# Tool definitions for Gemini
+CHAT_TOOLS = [
+    {
+        "name": "get_market_overview",
+        "description": "Get the current market index value, what day we're on, and whether the simulation is running.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_top_gainers",
+        "description": "Get a list of the top 5 best performing stocks with their prices and percentage gains.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_top_losers",
+        "description": "Get a list of the top 5 worst performing stocks with their prices and percentage losses.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_stock_price",
+        "description": "Get the current price and change percentage for a specific stock ticker.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g., AAPL, MSFT)"}
+            },
+            "required": ["ticker"]
+        }
+    }
+]
+
+# Map tool names to functions
+TOOL_FUNCTIONS = {
+    "get_market_overview": get_market_overview,
+    "get_top_gainers": get_top_gainers,
+    "get_top_losers": get_top_losers,
+    "get_stock_price": get_stock_price,
+}
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatMessageInput):
+    """Chat with the Gemini-powered trading consultant with market data access."""
+    
+    try:
+        # Build market data context
+        market_data = f"""
+=== CURRENT MARKET DATA (Day {current_market_state['tick']}) ===
+Market Index: {current_market_state['market_index']} ({'Up' if current_market_state['market_index'] > 100 else 'Down'} from starting value of 100)
+Status: {'Simulation Running' if current_market_state['is_running'] else 'Simulation Complete'}
+
+TOP GAINERS:
+"""
+        for g in current_market_state.get("top_gainers", [])[:5]:
+            market_data += f"  {g['ticker']}: ${g['price']:.2f} (+{g['change']:.1f}%)\n"
+        
+        market_data += "\nTOP LOSERS:\n"
+        for l in current_market_state.get("top_losers", [])[:5]:
+            market_data += f"  {l['ticker']}: ${l['price']:.2f} ({l['change']:.1f}%)\n"
+        
+        # Full system prompt with live data
+        full_prompt = TRADING_CONSULTANT_PROMPT + "\n\n" + market_data
+        
+        if GEMINI_AVAILABLE and gemini_client:
+            # Build conversation
+            conversation = ""
+            if request.history:
+                for msg in request.history[-6:]:
+                    role = "User" if msg.get("role") == "user" else "Assistant"
+                    conversation += f"{role}: {msg.get('content', '')}\n\n"
+            
+            user_prompt = f"{conversation}User: {request.message}\n\nAssistant:"
+            
+            response = gemini_client.models.generate_content(
+                model="gemini-3-flash-preview",
+                contents=user_prompt,
+                config={"system_instruction": full_prompt}
+            )
+            reply = response.text
+                
+        else:
+            # Fallback to OpenRouter (no tools)
+            from agents import TradingAgent
+            api_key = TradingAgent.API_KEY
+            base_url = "https://openrouter.ai/api/v1/chat/completions"
+            
+            # Include market context in prompt for fallback
+            market_context = f"\nCurrent market: Index={current_market_state['market_index']}, Day={current_market_state['tick']}"
+            
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost",
+            }
+            
+            payload = {
+                "model": "google/gemini-2.0-flash-001",
+                "messages": [
+                    {"role": "system", "content": TRADING_CONSULTANT_PROMPT + market_context},
+                    {"role": "user", "content": request.message}
+                ],
+                "temperature": 0.7,
+                "max_tokens": 1024,
+            }
+            response = http_requests.post(base_url, headers=headers, json=payload, timeout=30)
+            
+            if response.ok:
+                data = response.json()
+                reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            else:
+                return ChatResponse(message="Sorry, I encountered an error. Please try again.")
+        
+        return ChatResponse(message=reply or "I'm not sure how to respond to that. Could you rephrase?")
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ Chat API error: {e}")
+        traceback.print_exc()
+        return ChatResponse(message="Sorry, I'm having trouble connecting. Please try again in a moment.")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  🏛️  MARKET SIMULATION WebSocket API")
@@ -618,6 +859,7 @@ if __name__ == "__main__":
     print("  WebSocket: ws://localhost:8000/ws")
     print("  Health:    http://localhost:8000/")
     print("  Start:     POST http://localhost:8000/start")
+    print("  Chat:      POST http://localhost:8000/api/chat")
     print("\nTo start simulation, connect via WebSocket and send:")
     print('  {"command": "start_simulation", "num_ticks": 20, "tick_delay": 1.0}')
     print("\nWith custom agent:")

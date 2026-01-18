@@ -101,7 +101,7 @@ export function ChartControls({
             className="cursor-pointer"
           />
           <div className="flex justify-between text-xs text-muted-foreground font-mono">
-            <span>Day {tickCount}</span>
+            <span>Day {tickCount + 1}</span>
             <span>{maxTicks} days</span>
           </div>
         </div>

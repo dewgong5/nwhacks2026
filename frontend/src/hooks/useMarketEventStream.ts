@@ -528,6 +528,18 @@ function parseWebSocketMessage(data: string, state: MarketStore, isRecursive: bo
             payload: message.portfolios,
           });
         }
+        
+        // Check for top movers (gainers and losers)
+        if (message.top_gainers || message.top_losers) {
+          console.log('📊 Top movers received:', { gainers: message.top_gainers?.length, losers: message.top_losers?.length });
+          events.push({
+            type: 'TOP_MOVERS_UPDATE',
+            payload: {
+              gainers: message.top_gainers || [],
+              losers: message.top_losers || [],
+            },
+          });
+        }
       }
     }
 

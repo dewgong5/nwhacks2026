@@ -170,7 +170,7 @@ export function AgentStatusBoard() {
           <h3 className="font-semibold">Agent Status</h3>
         </div>
         <span className="text-sm text-muted-foreground font-mono">
-          Day {state.simStatus.tickCount}
+          Day {state.simStatus.tickCount + 1}
         </span>
       </div>
       

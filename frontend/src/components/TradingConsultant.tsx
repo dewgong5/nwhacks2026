@@ -11,6 +11,45 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
+// Simple markdown renderer
+function renderMarkdown(text: string) {
+  // Split into lines for processing
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  
+  lines.forEach((line, lineIndex) => {
+    // Process inline formatting
+    let processed = line
+      // Bold: **text** or __text__
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(.+?)__/g, '<strong>$1</strong>')
+      // Italic: *text* or _text_
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/_([^_]+)_/g, '<em>$1</em>')
+      // Code: `text`
+      .replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-sm">$1</code>');
+    
+    // Bullet points
+    if (line.trim().startsWith('* ') || line.trim().startsWith('- ')) {
+      const content = line.trim().slice(2);
+      const processedContent = content
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      elements.push(
+        <li key={lineIndex} className="ml-4" dangerouslySetInnerHTML={{ __html: processedContent }} />
+      );
+    } else if (processed.trim()) {
+      elements.push(
+        <p key={lineIndex} className="mb-2" dangerouslySetInnerHTML={{ __html: processed }} />
+      );
+    } else {
+      elements.push(<br key={lineIndex} />);
+    }
+  });
+  
+  return <div className="space-y-1">{elements}</div>;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -22,7 +61,7 @@ interface TradingConsultantProps {
   className?: string;
 }
 
-const API_ENDPOINT = import.meta.env.VITE_CHAT_API_URL || 'http://10.19.132.108:8000/api/chat';
+const API_ENDPOINT = import.meta.env.VITE_CHAT_API_URL || 'http://localhost:8000/api/chat';
 
 export function TradingConsultant({ className }: TradingConsultantProps) {
   const [messages, setMessages] = useState<Message[]>([
@@ -76,6 +115,11 @@ export function TradingConsultant({ className }: TradingConsultantProps) {
       // Replace this section with your actual API call
       // ============================================
       
+      // Build conversation history for context
+      const history = messages
+        .filter(m => m.id !== 'welcome')  // Skip welcome message
+        .map(m => ({ role: m.role, content: m.content }));
+      
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -83,10 +127,7 @@ export function TradingConsultant({ className }: TradingConsultantProps) {
         },
         body: JSON.stringify({
           message: userMessage.content,
-          // Add any additional context you want to send:
-          // - current market data
-          // - user's trading history
-          // - conversation history (optional)
+          history: history,
         }),
       });
 
@@ -180,14 +221,16 @@ export function TradingConsultant({ className }: TradingConsultantProps) {
                 
                 <div
                   className={cn(
-                    'max-w-[80%] rounded-lg px-4 py-2.5',
+                    'max-w-[85%] rounded-xl px-5 py-3',
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-foreground'
+                      : 'bg-muted/80 text-foreground'
                   )}
                 >
-                  <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-                  <span className="text-xs opacity-70 mt-1 block">
+                  <div className="text-base leading-relaxed break-words">
+                    {message.role === 'assistant' ? renderMarkdown(message.content) : message.content}
+                  </div>
+                  <span className="text-xs opacity-60 mt-2 block">
                     {new Date(message.timestamp).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
