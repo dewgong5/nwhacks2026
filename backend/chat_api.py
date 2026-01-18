@@ -63,12 +63,17 @@ class ChatResponse(BaseModel):
 
 
 def _get_api_key() -> str:
-    api_key = os.getenv("OPENROUTER_API_KEY")
+    api_key = (os.getenv("OPENROUTER_API_KEY") or "").strip().strip('"').strip("'")
     if not api_key:
         detail = "OPENROUTER_API_KEY not set"
         if load_dotenv is None:
             detail = f"{detail}; python-dotenv missing: {_DOTENV_IMPORT_ERROR}"
         raise HTTPException(status_code=500, detail=detail)
+    if not api_key.startswith("sk-or-"):
+        raise HTTPException(
+            status_code=500,
+            detail="OPENROUTER_API_KEY must start with 'sk-or-' (invalid key format)",
+        )
     return api_key
 
 
@@ -132,6 +137,8 @@ def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
+        "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "http://localhost:8080"),
+        "X-Title": os.getenv("OPENROUTER_APP_NAME", "MarketMind"),
     }
 
     response = requests.post(
