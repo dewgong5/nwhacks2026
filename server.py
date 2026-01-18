@@ -38,7 +38,7 @@ connected_clients: Set[WebSocket] = set()
 
 # Global market state for chat context
 current_market_state = {
-    "market_index": 100.0,
+    "market_index": 5500.0,
     "top_gainers": [],
     "top_losers": [],
     "tick": 0,
@@ -77,17 +77,17 @@ def load_stocks(csv_path="stocks_sp500.csv"):
 
 def calculate_market_index(initial_prices: dict, current_prices: dict) -> float:
     """
-    Calculate price-weighted market index (like Dow Jones).
-    Returns index value starting at 100.
+    Calculate market-cap-weighted index (like S&P 500).
+    Returns index value starting at 5500 (realistic S&P 500 range).
     """
-    # Divisor is set so index starts at 100
+    # Divisor is set so index starts at 5500
     start_total = sum(initial_prices.values())
     current_total = sum(current_prices.values())
     
     if start_total == 0:
-        return 100.0
+        return 5500.0
     
-    return 100.0 * (current_total / start_total)
+    return 5500.0 * (current_total / start_total)
 
 
 async def broadcast(message: dict):
@@ -110,7 +110,7 @@ async def broadcast(message: dict):
 
 
 async def run_simulation_streaming(
-    num_ticks: int = 5, 
+    num_ticks: int = 10, 
     tick_delay: float = 1.0,
     custom_agent_config: dict = None
 ):
@@ -254,7 +254,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         start_values[agent_id] = total
     
     # Send simulation start
-    await broadcast({"price": 100.0})
+    await broadcast({"price": 5500.0})
     
     # Initialize news generator
     news_generator = NewsGenerator(tickers, news_probability=0.10)  # 10% chance per tick (less frequent)
@@ -447,11 +447,11 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         # Get current prices
         current_prices = {ticker: order_books[ticker].get_last_price() for ticker in tickers}
         
-        # Calculate market index (price-weighted, like Dow)
+        # Calculate market index (market-cap-weighted, like S&P 500)
         market_index = calculate_market_index(initial_prices, current_prices)
         
         print(f"\n📈 Trades executed: {len(tick_log.trades)}")
-        print(f"📊 Market Index: {market_index:.2f} ({market_index - 100:+.2f}%)")
+        print(f"📊 Market Index: {market_index:.2f} ({market_index - 5500:+.2f})")
         
         # Calculate portfolio values for all agents
         portfolio_values = {}
@@ -597,7 +597,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Handle client commands
                 if data.get("command") == "start_simulation":
                     global simulation_task
-                    num_ticks = data.get("num_ticks", 5)
+                    num_ticks = data.get("num_ticks", 10)
                     tick_delay = data.get("tick_delay", 1.0)
                     
                     # Extract custom agent config if provided
@@ -642,7 +642,7 @@ async def root():
 
 
 @app.post("/start")
-async def start_simulation(num_ticks: int = 5, tick_delay: float = 1.0):
+async def start_simulation(num_ticks: int = 10, tick_delay: float = 1.0):
     """REST endpoint to start simulation (for testing)."""
     global simulation_task
     
@@ -665,13 +665,19 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 # Gemini API key and client
-GEMINI_API_KEY = "AIzaSyDKFwcogxxhLuqOo7syAYSSqVqnGDi2A6A"
+GEMINI_API_KEY = ""
 
 # Initialize Gemini client for chatbot ONLY (agents use OpenRouter)
-from google import genai
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-GEMINI_AVAILABLE = True
-print("✅ Chatbot using Gemini API (gemini-3-flash-preview)")
+try:
+    from google import genai
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    GEMINI_AVAILABLE = True
+    print("✅ Chatbot using Gemini API (gemini-3-flash-preview)")
+except Exception as e:
+    print(f"⚠️  Gemini client initialization failed: {e}")
+    print("   Falling back to OpenRouter for chat")
+    gemini_client = None
+    GEMINI_AVAILABLE = False
 
 # Trading consultant system prompt
 TRADING_CONSULTANT_PROMPT = """You are a trading consultant AI in a STOCK MARKET SIMULATION GAME. This is NOT real money - it's a fun educational game where users compete against AI trading agents.
@@ -703,7 +709,7 @@ def get_market_overview() -> dict:
     """Get current market index and overall status."""
     return {
         "market_index": current_market_state["market_index"],
-        "change_from_start": round(current_market_state["market_index"] - 100, 2),
+        "change_from_start": round(current_market_state["market_index"] - 5500, 2),
         "day": current_market_state["tick"],
         "is_running": current_market_state["is_running"],
         "status": "Simulation Running" if current_market_state["is_running"] else "Simulation Complete"
@@ -778,7 +784,7 @@ async def chat_endpoint(request: ChatMessageInput):
         # Build market data context
         market_data = f"""
 === CURRENT MARKET DATA (Day {current_market_state['tick']}) ===
-Market Index: {current_market_state['market_index']} ({'Up' if current_market_state['market_index'] > 100 else 'Down'} from starting value of 100)
+Market Index: {current_market_state['market_index']} ({'Up' if current_market_state['market_index'] > 5500 else 'Down'} from starting value of 5500)
 Status: {'Simulation Running' if current_market_state['is_running'] else 'Simulation Complete'}
 
 TOP GAINERS:
@@ -794,53 +800,70 @@ TOP GAINERS:
         full_prompt = TRADING_CONSULTANT_PROMPT + "\n\n" + market_data
         
         if GEMINI_AVAILABLE and gemini_client:
-            # Build conversation
-            conversation = ""
-            if request.history:
-                for msg in request.history[-6:]:
-                    role = "User" if msg.get("role") == "user" else "Assistant"
-                    conversation += f"{role}: {msg.get('content', '')}\n\n"
-            
-            user_prompt = f"{conversation}User: {request.message}\n\nAssistant:"
-            
-            response = gemini_client.models.generate_content(
-                model="gemini-3-flash-preview",
-                contents=user_prompt,
-                config={"system_instruction": full_prompt}
-            )
-            reply = response.text
+            try:
+                # Build conversation
+                conversation = ""
+                if request.history:
+                    for msg in request.history[-6:]:
+                        role = "User" if msg.get("role") == "user" else "Assistant"
+                        conversation += f"{role}: {msg.get('content', '')}\n\n"
                 
+                user_prompt = f"{conversation}User: {request.message}\n\nAssistant:"
+                
+                response = gemini_client.models.generate_content(
+                    model="gemini-3-flash-preview",
+                    contents=user_prompt,
+                    config={"system_instruction": full_prompt}
+                )
+                reply = response.text if hasattr(response, 'text') else str(response)
+            except Exception as gemini_error:
+                print(f"⚠️  Gemini API call failed: {gemini_error}")
+                # Fall through to OpenRouter fallback
+                GEMINI_AVAILABLE = False
+                reply = None
         else:
-            # Fallback to OpenRouter (no tools)
-            from agents import TradingAgent
-            api_key = TradingAgent.API_KEY
-            base_url = "https://openrouter.ai/api/v1/chat/completions"
-            
-            # Include market context in prompt for fallback
-            market_context = f"\nCurrent market: Index={current_market_state['market_index']}, Day={current_market_state['tick']}"
-            
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost",
-            }
-            
-            payload = {
-                "model": "google/gemini-2.0-flash-001",
-                "messages": [
-                    {"role": "system", "content": TRADING_CONSULTANT_PROMPT + market_context},
-                    {"role": "user", "content": request.message}
-                ],
-                "temperature": 0.7,
-                "max_tokens": 1024,
-            }
-            response = http_requests.post(base_url, headers=headers, json=payload, timeout=30)
-            
-            if response.ok:
-                data = response.json()
-                reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            else:
-                return ChatResponse(message="Sorry, I encountered an error. Please try again.")
+            reply = None
+                
+        # Fallback to OpenRouter if Gemini failed or unavailable
+        if not reply:
+            try:
+                from agents import TradingAgent
+                api_key = TradingAgent.API_KEY
+                base_url = "https://openrouter.ai/api/v1/chat/completions"
+                
+                # Include market context in prompt for fallback
+                market_context = f"\nCurrent market: Index={current_market_state['market_index']}, Day={current_market_state['tick']}"
+                
+                # Build messages with history
+                messages_list = [{"role": "system", "content": TRADING_CONSULTANT_PROMPT + market_context}]
+                if request.history:
+                    for msg in request.history[-6:]:
+                        messages_list.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+                messages_list.append({"role": "user", "content": request.message})
+                
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "http://localhost",
+                }
+                
+                payload = {
+                    "model": "google/gemini-2.0-flash-001",
+                    "messages": messages_list,
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                }
+                response = http_requests.post(base_url, headers=headers, json=payload, timeout=30)
+                
+                if response.ok:
+                    data = response.json()
+                    reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                else:
+                    print(f"⚠️  OpenRouter API error: {response.status_code} - {response.text}")
+                    reply = "Sorry, I encountered an error. Please try again."
+            except Exception as openrouter_error:
+                print(f"⚠️  OpenRouter fallback failed: {openrouter_error}")
+                reply = "Sorry, I'm having trouble connecting to the AI service. Please try again in a moment."
         
         return ChatResponse(message=reply or "I'm not sure how to respond to that. Could you rephrase?")
         
@@ -861,11 +884,11 @@ if __name__ == "__main__":
     print("  Start:     POST http://localhost:8000/start")
     print("  Chat:      POST http://localhost:8000/api/chat")
     print("\nTo start simulation, connect via WebSocket and send:")
-    print('  {"command": "start_simulation", "num_ticks": 20, "tick_delay": 1.0}')
+    print('  {"command": "start_simulation", "num_ticks": 10, "tick_delay": 1.0}')
     print("\nWith custom agent:")
     print('  {')
     print('    "command": "start_simulation",')
-    print('    "num_ticks": 20,')
+    print('    "num_ticks": 10,')
     print('    "custom_agent": {')
     print('      "name": "My Bot",')
     print('      "prompt": "I am a momentum trader who buys stocks going up..."')
