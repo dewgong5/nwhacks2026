@@ -1,0 +1,214 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@layer base {
+  :root {
+    --background: 220 20% 7%;
+    --foreground: 210 20% 95%;
+
+    --card: 220 18% 10%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 220 18% 10%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 142 76% 50%;
+    --primary-foreground: 220 20% 7%;
+
+    --secondary: 220 14% 16%;
+    --secondary-foreground: 210 20% 95%;
+
+    --muted: 220 14% 16%;
+    --muted-foreground: 215 15% 55%;
+
+    --accent: 220 14% 20%;
+    --accent-foreground: 210 20% 95%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 14% 18%;
+    --input: 220 14% 18%;
+    --ring: 142 76% 50%;
+
+    --radius: 0.75rem;
+
+    /* Custom trading colors */
+    --gain: 142 76% 50%;
+    --loss: 0 84% 60%;
+    --gain-muted: 142 40% 25%;
+    --loss-muted: 0 40% 25%;
+    
+    /* Trader type colors */
+    --trader-institutional: 217 91% 60%;
+    --trader-retail: 142 70% 45%;
+    --trader-quant: 270 70% 60%;
+    --trader-hft: 32 95% 55%;
+    --trader-custom: 190 90% 50%;
+
+    /* Glass effect */
+    --glass: 220 18% 12%;
+    --glass-border: 220 14% 22%;
+    
+    /* Chart colors */
+    --chart-candle-up: 142 76% 50%;
+    --chart-candle-down: 0 84% 60%;
+    --chart-volume: 220 50% 40%;
+    --chart-grid: 220 14% 15%;
+  }
+
+  .dark {
+    --background: 220 20% 7%;
+    --foreground: 210 20% 95%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-xl border border-glass-border rounded-xl;
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:bg-card/90 hover:border-primary/30;
+  }
+
+  .text-gain {
+    @apply text-[hsl(var(--gain))];
+  }
+
+  .text-loss {
+    @apply text-[hsl(var(--loss))];
+  }
+
+  .bg-gain {
+    @apply bg-[hsl(var(--gain))];
+  }
+
+  .bg-loss {
+    @apply bg-[hsl(var(--loss))];
+  }
+
+  .bg-gain-muted {
+    @apply bg-[hsl(var(--gain-muted))];
+  }
+
+  .bg-loss-muted {
+    @apply bg-[hsl(var(--loss-muted))];
+  }
+
+  .trader-institutional {
+    @apply text-[hsl(var(--trader-institutional))];
+  }
+
+  .trader-retail {
+    @apply text-[hsl(var(--trader-retail))];
+  }
+
+  .trader-quant {
+    @apply text-[hsl(var(--trader-quant))];
+  }
+
+  .trader-hft {
+    @apply text-[hsl(var(--trader-hft))];
+  }
+
+  .trader-custom {
+    @apply text-[hsl(var(--trader-custom))];
+  }
+
+  .glow-gain {
+    box-shadow: 0 0 20px hsl(var(--gain) / 0.3), 0 0 40px hsl(var(--gain) / 0.1);
+  }
+
+  .glow-loss {
+    box-shadow: 0 0 20px hsl(var(--loss) / 0.3), 0 0 40px hsl(var(--loss) / 0.1);
+  }
+
+  .animate-value-up {
+    animation: valueUp 0.4s ease-out;
+  }
+
+  .animate-value-down {
+    animation: valueDown 0.4s ease-out;
+  }
+
+  .animate-rank-change {
+    animation: rankSlide 0.5s ease-out;
+  }
+
+  .animate-pulse-gain {
+    animation: pulseGain 0.6s ease-out;
+  }
+
+  .animate-pulse-loss {
+    animation: pulseLoss 0.6s ease-out;
+  }
+}
+
+@keyframes valueUp {
+  0% { transform: translateY(4px); opacity: 0.5; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes valueDown {
+  0% { transform: translateY(-4px); opacity: 0.5; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes rankSlide {
+  0% { transform: translateY(-8px); opacity: 0.7; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulseGain {
+  0% { background-color: hsl(var(--gain) / 0.3); }
+  100% { background-color: transparent; }
+}
+
+@keyframes pulseLoss {
+  0% { background-color: hsl(var(--loss) / 0.3); }
+  100% { background-color: transparent; }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--secondary));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Number animations */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
