@@ -15,6 +15,7 @@ import { ProfileBuilder } from '@/components/ProfileBuilder';
 import { PerformanceCelebration } from '@/components/PerformanceCelebration';
 import { SessionEndBanner } from '@/components/SessionEndBanner';
 import { PostMarketAnalysis } from '@/components/PostMarketAnalysis';
+import { TradingConsultant } from '@/components/TradingConsultant';
 import { TraderResult } from '@/types/trading';
 import { useMarketStore } from '@/store/marketStore';
 
@@ -91,7 +92,7 @@ const Index = () => {
             <SimulationControls disabled={isSessionComplete} />
             
             {/* Agent Activity + Your Trader - Side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[180px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ minHeight: '400px', height: '400px' }}>
               <CompactAgentFeed />
               <TraderFooter 
                 userTrader={userTrader} 
@@ -107,10 +108,16 @@ const Index = () => {
             <MarketSummary />
           </div>
 
-          {/* Right Column - Market Board (30%) - Extends full height */}
-          <div className="lg:w-[30%]">
-          <div className="h-[calc(55vh+70px)] md:h-[calc(55vh+70px)] lg:h-[calc(60vh+70px)]">
+          {/* Right Column - Market Board + Chat (30%) */}
+          <div className="lg:w-[30%] space-y-4">
+            {/* Market Board */}
+            <div className="h-[calc(55vh+70px)] md:h-[calc(55vh+70px)] lg:h-[calc(60vh+70px)]">
               <MarketBoard />
+            </div>
+            
+            {/* Trading Consultant Chat */}
+            <div className="h-[400px] md:h-[450px]">
+              <TradingConsultant />
             </div>
           </div>
         </div>

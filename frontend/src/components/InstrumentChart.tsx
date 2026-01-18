@@ -14,9 +14,28 @@ import { cn } from '@/lib/utils';
 interface ChartDataPoint {
   index: number;
   price: number;
-  high: number;
-  low: number;
   volume: number;
+}
+
+/**
+ * Generate cosmetic high/low values from close price for visual variety.
+ * Uses deterministic pseudo-randomness based on index for consistency.
+ * These values are purely aesthetic and not related to actual market data.
+ */
+function generateCosmeticRange(close: number, index: number): { high: number; low: number } {
+  // Deterministic "random" value based on index (for consistency)
+  const seed = (index * 17 + close * 0.01) % 1;
+  const seed2 = (index * 23 + close * 0.007) % 1;
+  
+  // High: close + 0.1% to 0.6% (cosmetic upward movement)
+  const highOffset = 0.001 + (seed * 0.005);
+  const high = close * (1 + highOffset);
+  
+  // Low: close - 0.1% to 0.6% (cosmetic downward movement)
+  const lowOffset = 0.001 + (seed2 * 0.005);
+  const low = close * (1 - lowOffset);
+  
+  return { high, low };
 }
 
 export function InstrumentChart() {
@@ -28,17 +47,81 @@ export function InstrumentChart() {
     tickHistory.map((tick, i) => ({
       index: i,
       price: tick.close,
-      high: tick.high,
-      low: tick.low,
       volume: tick.volume,
     })),
     [tickHistory]
   );
   
+  // Generate cosmetic high/low values for Y-axis domain calculation
+  // These are purely for visual variety and not from API data
+  const cosmeticRanges = useMemo(() => 
+    tickHistory.map((tick, i) => generateCosmeticRange(tick.close, i)),
+    [tickHistory]
+  );
+  
+  // Calculate Y-axis domain based on actual price data to show price changes clearly
+  // MUST be called before any early returns (Rules of Hooks)
+  const { minPrice, maxPrice } = useMemo(() => {
+    if (chartData.length === 0) {
+      // If no data yet, show empty chart with default range
+      return {
+        minPrice: 0,
+        maxPrice: 100,
+      };
+    }
+    
+    // Get actual price range from data
+    const prices = chartData.map(d => d.price);
+    const actualMin = Math.min(...prices);
+    const actualMax = Math.max(...prices);
+    const priceRange = actualMax - actualMin;
+    
+    // If range is very small, ensure minimum visible range
+    // Use 10% padding on each side, but at least 2% of the average price
+    const avgPrice = (actualMin + actualMax) / 2;
+    const minPadding = Math.max(priceRange * 0.1, avgPrice * 0.02);
+    
+    const calculatedMin = Math.max(0, actualMin - minPadding);
+    const calculatedMax = actualMax + minPadding;
+    
+    // Ensure minimum range for visibility (at least 1% of the average)
+    const minRange = avgPrice * 0.01;
+    const currentRange = calculatedMax - calculatedMin;
+    
+    if (currentRange < minRange) {
+      const center = (calculatedMin + calculatedMax) / 2;
+      return {
+        minPrice: Math.max(0, center - minRange / 2),
+        maxPrice: center + minRange / 2,
+      };
+    }
+    
+    return {
+      minPrice: calculatedMin,
+      maxPrice: calculatedMax,
+    };
+  }, [chartData, instrument?.price || 0]);
+  
+  // Now we can do early returns after all hooks are called
   if (!instrument) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground">
         Select an instrument to view chart
+      </div>
+    );
+  }
+
+  // Show empty state if no data has been received yet
+  if (chartData.length === 0) {
+    return (
+      <div className="relative h-full w-full">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center text-muted-foreground">
+            <Activity className="h-8 w-8 mx-auto mb-2 animate-pulse" />
+            <p className="text-sm">Waiting for market data...</p>
+            <p className="text-xs mt-1">First tick will appear here</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -48,13 +131,6 @@ export function InstrumentChart() {
   const firstPrice = tickHistory[0]?.close || instrument.price;
   const overallChange = instrument.price - firstPrice;
   const overallPositive = overallChange >= 0;
-  
-  const minPrice = chartData.length > 0 
-    ? Math.min(...chartData.map(d => d.low)) * 0.998 
-    : instrument.price * 0.99;
-  const maxPrice = chartData.length > 0 
-    ? Math.max(...chartData.map(d => d.high)) * 1.002 
-    : instrument.price * 1.01;
 
   return (
     <div className="relative h-full w-full">
@@ -145,8 +221,21 @@ export function InstrumentChart() {
             axisLine={false}
             tickLine={false}
             tick={{ fill: 'hsl(215, 15%, 55%)', fontSize: 11, fontFamily: 'JetBrains Mono' }}
-            tickFormatter={(value) => instrument.kind === 'index' ? value.toFixed(0) : `$${value.toFixed(0)}`}
-            width={60}
+            tickFormatter={(value) => {
+              // Smart formatting based on price magnitude
+              if (instrument.kind === 'index') {
+                if (value >= 1000) return value.toFixed(0);
+                if (value >= 100) return value.toFixed(1);
+                return value.toFixed(2);
+              } else {
+                if (value >= 1000) return `$${value.toFixed(0)}`;
+                if (value >= 100) return `$${value.toFixed(1)}`;
+                if (value >= 10) return `$${value.toFixed(2)}`;
+                return `$${value.toFixed(2)}`;
+              }
+            }}
+            width={70}
+            allowDecimals={true}
           />
           <ReferenceLine 
             y={firstPrice} 

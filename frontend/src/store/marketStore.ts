@@ -19,90 +19,48 @@ import { SimulationSpeed } from '@/types/trading';
 // INITIAL STATE GENERATORS
 // ============================================
 
-function generateInitialPrice(basePrice: number, variance: number = 0.1): number {
-  return basePrice * (1 + (Math.random() - 0.5) * variance);
-}
-
 function generateInitialInstruments(): Record<string, MarketInstrument> {
   const instruments: Record<string, MarketInstrument> = {};
+  const STARTING_PRICE = 100;
   
-  // S&P 500 Index
-  const indexPrice = generateInitialPrice(4500, 0.05);
+  // S&P 500 Index - start at 100, will be updated by WebSocket
   instruments['SP500'] = {
     id: 'SP500',
     kind: 'index',
     label: 'S&P 500',
-    price: indexPrice,
-    previousPrice: indexPrice,
+    price: STARTING_PRICE,
+    previousPrice: STARTING_PRICE,
     changePercent: 0,
-    range: { low: indexPrice * 0.995, high: indexPrice * 1.005 },
+    range: { low: STARTING_PRICE, high: STARTING_PRICE },
   };
   
-  // Sectors
+  // Sectors - start at 100, will be updated by WebSocket
   const sectorIds = Object.keys(SECTOR_CONFIG) as SectorId[];
   sectorIds.forEach((sectorId) => {
     const { label } = SECTOR_CONFIG[sectorId];
-    const basePrice = 100 + Math.random() * 50;
-    const price = generateInitialPrice(basePrice, 0.03);
     
     instruments[`SECTOR_${sectorId}`] = {
       id: `SECTOR_${sectorId}`,
       kind: 'sector',
       label,
-      price,
-      previousPrice: price,
+      price: STARTING_PRICE,
+      previousPrice: STARTING_PRICE,
       changePercent: 0,
-      range: { low: price * 0.99, high: price * 1.01 },
+      range: { low: STARTING_PRICE, high: STARTING_PRICE },
     };
   });
   
   return instruments;
 }
 
-function generateInitialTickHistory(instrument: MarketInstrument, count: number = 30): TickData[] {
-  const history: TickData[] = [];
-  let price = instrument.price * 0.98; // Start slightly lower
-  const volatility = instrument.kind === 'index' ? 0.005 : 0.015;
-  
-  for (let i = 0; i < count; i++) {
-    const change = (Math.random() - 0.48) * volatility * price;
-    const open = price;
-    const close = price + change;
-    const high = Math.max(open, close) * (1 + Math.random() * volatility * 0.3);
-    const low = Math.min(open, close) * (1 - Math.random() * volatility * 0.3);
-    
-    history.push({
-      timestamp: Date.now() - (count - i) * 1000,
-      open,
-      high,
-      low,
-      close,
-      volume: Math.floor(Math.random() * 1000000) + 100000,
-    });
-    
-    price = close;
-  }
-  
-  return history;
-}
-
 export function createInitialState(): MarketStore {
   const instruments = generateInitialInstruments();
   const tickHistory: Record<string, TickData[]> = {};
   
-  // Generate tick history for all instruments
+  // Initialize empty tick history for all instruments - no dummy data
+  // Prices start at 100 and will be updated when first WebSocket tick arrives
   Object.values(instruments).forEach((instrument) => {
-    tickHistory[instrument.id] = generateInitialTickHistory(instrument);
-  });
-  
-  // Update prices to match final tick
-  Object.keys(instruments).forEach((id) => {
-    const lastTick = tickHistory[id][tickHistory[id].length - 1];
-    instruments[id].price = lastTick.close;
-    instruments[id].range = {
-      low: Math.min(...tickHistory[id].map(t => t.low)),
-      high: Math.max(...tickHistory[id].map(t => t.high)),
-    };
+    tickHistory[instrument.id] = [];
   });
   
   // All instruments subscribed by default
@@ -142,11 +100,12 @@ export function marketReducer(state: MarketStore, action: MarketAction): MarketS
           
           const newTick: TickData = {
             timestamp: payload.timestamp,
-            open: instrument.price,
-            high: payload.range.high,
-            low: payload.range.low,
-            close: payload.price,
-            volume: Math.floor(Math.random() * 1000000) + 100000,
+            // Use provided open/high/low/close/volume from payload if available, otherwise use defaults
+            open: (payload as any).open !== undefined ? (payload as any).open : instrument.price,
+            high: (payload as any).high !== undefined ? (payload as any).high : payload.range.high,
+            low: (payload as any).low !== undefined ? (payload as any).low : payload.range.low,
+            close: (payload as any).close !== undefined ? (payload as any).close : payload.price,
+            volume: (payload as any).volume !== undefined ? (payload as any).volume : Math.floor(Math.random() * 1000000) + 100000,
           };
           
           return {
@@ -177,11 +136,12 @@ export function marketReducer(state: MarketStore, action: MarketAction): MarketS
           
           const newTick: TickData = {
             timestamp: payload.timestamp,
-            open: instrument.price,
-            high: payload.range.high,
-            low: payload.range.low,
-            close: payload.price,
-            volume: Math.floor(Math.random() * 500000) + 50000,
+            // Use provided open/high/low/close/volume from payload if available, otherwise use defaults
+            open: (payload as any).open !== undefined ? (payload as any).open : instrument.price,
+            high: (payload as any).high !== undefined ? (payload as any).high : payload.range.high,
+            low: (payload as any).low !== undefined ? (payload as any).low : payload.range.low,
+            close: (payload as any).close !== undefined ? (payload as any).close : payload.price,
+            volume: (payload as any).volume !== undefined ? (payload as any).volume : Math.floor(Math.random() * 500000) + 50000,
           };
           
           return {
@@ -216,9 +176,37 @@ export function marketReducer(state: MarketStore, action: MarketAction): MarketS
         }
         
         case 'AGENT_ACTIVITY': {
+          // Deduplicate: Check if this activity already exists (by ID or by content + timestamp)
+          const isDuplicate = state.agentActivities.some(
+            existing => 
+              existing.id === event.payload.id || 
+              (existing.summary === event.payload.summary && 
+               Math.abs(existing.timestamp - event.payload.timestamp) < 1000) // Same within 1 second
+          );
+          
+          if (isDuplicate) {
+            console.log('⚠️ Duplicate agent activity ignored:', {
+              id: event.payload.id,
+              summary: event.payload.summary,
+              timestamp: event.payload.timestamp,
+              existingCount: state.agentActivities.length
+            });
+            return state; // Don't add duplicate
+          }
+          
+          // Add new activity to the front, keep ALL activities (no limit)
+          // This ensures the log persists throughout the entire simulation
+          const newActivities = [event.payload, ...state.agentActivities];
+          console.log('✅ Added new agent activity:', {
+            id: event.payload.id,
+            agentName: event.payload.agentName,
+            summary: event.payload.summary,
+            totalActivities: newActivities.length
+          });
+          
           return {
             ...state,
-            agentActivities: [event.payload, ...state.agentActivities].slice(0, 50),
+            agentActivities: newActivities,
           };
         }
       }
@@ -255,6 +243,8 @@ export function marketReducer(state: MarketStore, action: MarketAction): MarketS
     }
     
     case 'SIM_RESET': {
+      // Reset clears everything including activities for a fresh start
+      // Activities will accumulate during a single simulation run (day 0 to day 100)
       return createInitialState();
     }
     
@@ -316,8 +306,8 @@ export const selectTopPerformers = (state: MarketStore, count: number = 3): Mark
 export const selectBottomPerformers = (state: MarketStore, count: number = 3): MarketInstrument[] => 
   selectSortedSectors(state).slice(-count).reverse();
 
-export const selectAgentActivities = (state: MarketStore, count: number = 10): AgentActivityPayload[] => 
-  state.agentActivities.slice(0, count);
+export const selectAgentActivities = (state: MarketStore, count?: number): AgentActivityPayload[] => 
+  count !== undefined ? state.agentActivities.slice(0, count) : state.agentActivities;
 
 export const selectIsRunning = (state: MarketStore): boolean => 
   state.simStatus.running;

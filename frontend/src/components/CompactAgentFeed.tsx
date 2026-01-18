@@ -45,18 +45,18 @@ function CompactActivityItem({ activity }: CompactActivityItemProps) {
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
-      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/30 hover:bg-accent/50 transition-colors whitespace-nowrap shrink-0"
+      className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-muted/30 hover:bg-accent/50 transition-colors shrink-0"
     >
       <div className={cn(
-        "p-1 rounded-full bg-muted/50",
+        "p-1 rounded-full bg-muted/50 shrink-0",
         ACTION_COLORS[activity.action]
       )}>
         <Icon size={10} />
       </div>
-      <span className={cn("text-xs font-medium", AGENT_TYPE_COLORS[activity.agentType])}>
+      <span className={cn("text-xs font-medium shrink-0", AGENT_TYPE_COLORS[activity.agentType])}>
         {activity.agentName}
       </span>
-      <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+      <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
         {activity.summary.replace(activity.agentName, '').trim()}
       </span>
     </motion.div>
@@ -65,34 +65,42 @@ function CompactActivityItem({ activity }: CompactActivityItemProps) {
 
 export function CompactAgentFeed() {
   const { state } = useMarketStore();
-  const activities = selectAgentActivities(state, 8);
+  // Show ALL activities - no limit, so the log persists throughout the entire simulation
+  const activities = selectAgentActivities(state);
   
   return (
-    <div className="glass-card p-3 h-full flex flex-col">
+    <div className="glass-card p-3 h-full flex flex-col min-h-0">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3 shrink-0">
         <Activity size={14} className="text-primary" />
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Agent Activity
         </span>
+        {activities.length > 0 && (
+          <span className="text-xs text-muted-foreground/70 ml-auto">
+            {activities.length} events
+          </span>
+        )}
       </div>
       
       {/* Scrollable activity list - vertical */}
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="flex flex-col gap-2 pr-2">
-          <AnimatePresence mode="popLayout">
-            {activities.length > 0 ? (
-              activities.map((activity) => (
-                <CompactActivityItem key={activity.id} activity={activity} />
-              ))
-            ) : (
-              <span className="text-xs text-muted-foreground/50">
-                Waiting for agent activity...
-              </span>
-            )}
-          </AnimatePresence>
-        </div>
-      </ScrollArea>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full w-full">
+          <div className="flex flex-col gap-2 pr-4 pb-2">
+            <AnimatePresence mode="popLayout">
+              {activities.length > 0 ? (
+                activities.map((activity) => (
+                  <CompactActivityItem key={activity.id} activity={activity} />
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground/50">
+                  Waiting for agent activity...
+                </span>
+              )}
+            </AnimatePresence>
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }
