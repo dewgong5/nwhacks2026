@@ -122,7 +122,7 @@ async def run_simulation_streaming(
         custom_agent_config: Optional config for custom agent:
             - name: Display name for the agent
             - prompt: Custom system prompt for trading strategy
-            - capital: Starting capital (default: 100000)
+            - capital: Starting capital (default: 5000)
     """
     global current_market_state
     
@@ -149,10 +149,10 @@ async def run_simulation_streaming(
         orchestrator.register_stock(ticker, book)
     
     # Register agents
-    orchestrator.register_agent("citadel", initial_cash=1000000.0)
-    orchestrator.register_agent("jane_street", initial_cash=1000000.0)
-    orchestrator.register_agent("blackrock", initial_cash=2000000.0)
-    orchestrator.register_agent("vanguard", initial_cash=2000000.0)
+    orchestrator.register_agent("ccl", initial_cash=10000000.0)
+    orchestrator.register_agent("jane_street", initial_cash=10000000.0)
+    orchestrator.register_agent("blackrock", initial_cash=20000000.0)
+    orchestrator.register_agent("vanguard", initial_cash=20000000.0)
     orchestrator.register_agent("retail_1", initial_cash=50000.0)
     orchestrator.register_agent("retail_2", initial_cash=50000.0)
     orchestrator.register_agent("retail_3", initial_cash=50000.0)
@@ -160,7 +160,7 @@ async def run_simulation_streaming(
     orchestrator.register_agent("retail_daytrader", initial_cash=50000.0)
     
     # Custom agent - use capital from config if provided, default to $100k
-    custom_capital = 100000.0
+    custom_capital = 50000.0
     if custom_agent_config and custom_agent_config.get("capital"):
         custom_capital = float(custom_agent_config["capital"])
     orchestrator.register_agent("my_agent", initial_cash=custom_capital)
@@ -175,7 +175,7 @@ async def run_simulation_streaming(
     
     # Give starting shares - institutions get ALL stocks
     for ticker in tickers:
-        orchestrator._agent_portfolios["citadel"].positions[ticker] = 200
+        orchestrator._agent_portfolios["ccl"].positions[ticker] = 200
         orchestrator._agent_portfolios["jane_street"].positions[ticker] = 200
         orchestrator._agent_portfolios["blackrock"].positions[ticker] = 100
         orchestrator._agent_portfolios["vanguard"].positions[ticker] = 100
@@ -210,7 +210,7 @@ async def run_simulation_streaming(
     # Create agents
     MODEL = "google/gemini-2.0-flash-001"
     
-    citadel = create_agent("citadel", orchestrator, "quant_institutional", MODEL, stock_history)
+    ccl = create_agent("ccl", orchestrator, "quant_institutional", MODEL, stock_history)
     jane_street = create_agent("jane_street", orchestrator, "quant_institutional", MODEL, stock_history)
     blackrock = create_agent("blackrock", orchestrator, "fundamental_institutional", MODEL, stock_history)
     vanguard = create_agent("vanguard", orchestrator, "fundamental_institutional", MODEL, stock_history)
@@ -243,7 +243,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
 """
         my_agent = create_custom_agent("my_agent", orchestrator, MY_STRATEGY, MODEL, stock_history)
     
-    all_agents = ["citadel", "jane_street", "blackrock", "vanguard", 
+    all_agents = ["ccl", "jane_street", "blackrock", "vanguard", 
                   "retail_1", "retail_2", "retail_3", "retail_4", "retail_daytrader", "my_agent"]
     
     # Calculate starting values
@@ -257,7 +257,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
     await broadcast({"price": 5500.0})
     
     # Initialize news generator
-    news_generator = NewsGenerator(tickers, news_probability=0.10)  # 10% chance per tick (less frequent)
+    news_generator = NewsGenerator(tickers, news_probability=0.85)  # 85% chance per tick (very frequent - lots of news!)
     
     SPREAD_PCT = 0.002
     MM_SIZE = 100
@@ -271,8 +271,8 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         # Apply random price fluctuations to ALL stocks at start of tick
         # This simulates natural market movement (other traders, sentiment, macro events)
         
-        # One bear market crash on tick 2 (Day 3)
-        is_crash_tick = (tick == 2)
+        # Random bear market crash with extremely low probability (0.1% chance per tick, but only after tick 1)
+        is_crash_tick = (tick > 1 and random.random() < 0.001)  # 0.1% chance after first tick
         
         if is_crash_tick:
             print("\n🐻 BEAR MARKET DAY! 📉")
@@ -296,7 +296,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                 order_books[ticker]._last_price *= (1 + crash_pct)
                 pct_change = crash_pct * 100
             else:
-                # Normal volatility - BEARISH baseline (-1.5% mean drift)
+                # Normal volatility - BULLISH bias (70% stocks trending up)
                 pct_change = order_books[ticker].apply_tick_volatility(base_volatility=0.03)
             
             if abs(pct_change) > 1.0:  # Only log big moves (>1%)
@@ -316,7 +316,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             orchestrator.submit_order("market_maker", ticker, Side.BUY, round(last_price - spread/2, 2), MM_SIZE)
             orchestrator.submit_order("market_maker", ticker, Side.SELL, round(last_price + spread/2, 2), MM_SIZE)
         
-        # Generate news event RIGHT BEFORE agents start (guaranteed on tick 0, 40% chance after)
+        # Generate news event RIGHT BEFORE agents start (guaranteed on tick 0, higher chance after)
         if tick == 0:
             # Force news on first tick for dramatic opening
             old_prob = news_generator.news_probability
@@ -325,6 +325,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             news_generator.news_probability = old_prob
             print(f"   🎯 Tick 0 forced news: {news_event}")
         else:
+            # Increased probability for more frequent news
             news_event = news_generator.maybe_generate_news(tick)
             print(f"   🎲 Random news check: {news_event is not None}")
         
@@ -363,7 +364,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         # LLM agents decide (institutional) - STREAM EVENTS IMMEDIATELY
         # Quants see news IMMEDIATELY, fundamentals see it 1 tick later
         llm_agents = [
-            (citadel, "CITADEL", "🏦", "quant"), (jane_street, "JANE STREET", "🏦", "quant"),
+            (ccl, "CCL", "🏦", "quant"), (jane_street, "JANE STREET", "🏦", "quant"),
             (blackrock, "BLACKROCK", "📊", "fundamental"), (vanguard, "VANGUARD", "📊", "fundamental")
         ]
         for agent, name, emoji, agent_type in llm_agents:
@@ -511,7 +512,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
     
     final_results = []
     agent_display_names = {
-        "citadel": "Citadel Securities",
+        "ccl": "CCL",
         "jane_street": "Jane Street",
         "blackrock": "BlackRock",
         "vanguard": "Vanguard",
@@ -523,7 +524,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         "my_agent": my_agent_name,
     }
     agent_types = {
-        "citadel": "quant", "jane_street": "quant",
+        "ccl": "quant", "jane_street": "quant",
         "blackrock": "institutional", "vanguard": "institutional",
         "retail_1": "retail", "retail_2": "retail",
         "retail_3": "retail", "retail_4": "retail",
@@ -548,8 +549,13 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             "pnl_pct": round(pnl_pct, 2),
         })
     
-    # Sort by P&L %
-    final_results.sort(key=lambda x: x["pnl_pct"], reverse=True)
+    # Sort by weighted profit score that favors large capital agents
+    # Formula: profit + (starting_capital * 0.0001) ensures large firms always win
+    # This means a $10M firm gets a $1k bonus, making it nearly impossible for retailers to beat them
+    def get_weighted_score(result):
+        return result["pnl"] + (result["start_value"] * 0.0001)
+    
+    final_results.sort(key=get_weighted_score, reverse=True)
     
     # Add ranks
     for i, result in enumerate(final_results):
@@ -665,7 +671,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 # Gemini API key and client
-GEMINI_API_KEY = ""
+GEMINI_API_KEY = "AIzaSyDKFwcogxxhLuqOo7syAYSSqVqnGDi2A6A"
 
 # Initialize Gemini client for chatbot ONLY (agents use OpenRouter)
 try:
@@ -687,7 +693,7 @@ Your role:
 - Explain which stocks are up/down and why that might be
 - Give trading tips and strategies for the GAME
 - Be enthusiastic and engaging like a sports commentator
-- Comment on how the AI agents (Citadel, Jane Street, BlackRock, etc.) are performing
+- Comment on how the AI agents (CCL, Jane Street, BlackRock, etc.) are performing
 
 IMPORTANT: This is a GAME with FAKE money. No financial disclaimers needed! Be direct, give opinions, make predictions, have fun with it. You can say things like "I'd buy AAPL here" or "That's a risky move" - it's all simulated.
 
@@ -819,7 +825,6 @@ TOP GAINERS:
             except Exception as gemini_error:
                 print(f"⚠️  Gemini API call failed: {gemini_error}")
                 # Fall through to OpenRouter fallback
-                GEMINI_AVAILABLE = False
                 reply = None
         else:
             reply = None

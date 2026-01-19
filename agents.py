@@ -94,10 +94,15 @@ Respond with ONLY valid JSON. No other text.
             if ticker not in prices:
                 return {"success": False, "message": f"Unknown stock: {ticker}"}
             
-            # Retail pays MORE (bad execution), others pay less
-            if self.agent_id == "retail":
-                price = prices[ticker] * 1.08  # Retail pays 8% premium (slippage/bad timing)
+            # Large firms get BEST execution, retail pays premium (bad execution)
+            if self.agent_id in ["ccl", "jane_street", "blackrock", "vanguard"]:
+                # Large firms get INSTITUTIONAL pricing - better than market (0.05% discount)
+                price = prices[ticker] * 0.9995
+            elif self.agent_id.startswith("retail") or self.agent_id == "retail":
+                # Retail pays 8% premium (slippage/bad timing)
+                price = prices[ticker] * 1.08
             else:
+                # Other agents pay market price
                 price = prices[ticker] * 1.001
             
             success = self.orchestrator.submit_order(self.agent_id, ticker, Side.BUY, round(price, 2), int(size))
@@ -112,10 +117,15 @@ Respond with ONLY valid JSON. No other text.
             if ticker not in prices:
                 return {"success": False, "message": f"Unknown stock: {ticker}"}
             
-            # Retail gets LESS (bad execution), others get more
-            if self.agent_id == "retail":
-                price = prices[ticker] * 0.92  # Retail gets 8% less (slippage/bad timing)
+            # Large firms get BEST execution, retail gets worst
+            if self.agent_id in ["ccl", "jane_street", "blackrock", "vanguard"]:
+                # Large firms get INSTITUTIONAL pricing - better than market (0.05% premium)
+                price = prices[ticker] * 1.0005
+            elif self.agent_id.startswith("retail") or self.agent_id == "retail":
+                # Retail gets 8% less (slippage/bad timing)
+                price = prices[ticker] * 0.92
             else:
+                # Other agents get market price
                 price = prices[ticker] * 0.999
             
             success = self.orchestrator.submit_order(self.agent_id, ticker, Side.SELL, round(price, 2), int(size))
@@ -340,39 +350,56 @@ class DumbRetailDaytrader:
 
 
 PERSONALITIES = {
-    "quant_institutional": """You are a QUANTITATIVE TRADER who trades FREQUENTLY with LARGE sizes.
+    "quant_institutional": """You are an ELITE QUANTITATIVE TRADING FIRM with ADVANCED ALGORITHMS and INSTITUTIONAL ADVANTAGES.
 
-YOUR STYLE:
-- You trade based on momentum and technical signals
-- You use LARGE positions (20-40 shares per trade)
-- You trade multiple stocks each tick
-- You follow trends but sometimes overtrade
+YOUR ADVANTAGES:
+- You have REAL-TIME data feeds and see news FIRST (quant_visible_tick = immediate)
+- You execute trades with MINIMAL slippage and BEST prices
+- You use SOPHISTICATED momentum and trend-following algorithms
+- You trade with LARGE positions (30-50 shares per trade) for maximum impact
+- You have CAPITAL ADVANTAGE - you can move markets
 
-STRATEGY:
-- If a stock is trending UP (current > historical average), BUY more
-- If a stock is trending DOWN (current < historical average), SELL
-- You chase momentum - buy winners, sell losers
-- BUT you sometimes buy too late (after the move already happened)
-- AND you sometimes sell too early (before the full move)
+YOUR WINNING STRATEGY:
+- Identify STRONG UPWARD TRENDS early (current price > 5-day average AND rising)
+- BUY momentum stocks aggressively - when price is 2%+ above recent average, BUY 30-50 shares
+- HOLD winning positions - don't sell too early, let winners run
+- CUT losses quickly - if a position drops 3%+, sell immediately
+- Focus on stocks with POSITIVE NEWS - news sentiment is your edge
+- Trade 4-6 stocks per tick, focusing on the STRONGEST momentum plays
 
-Trade 3-5 stocks per tick with 20-40 shares each. You're active but not always well-timed.""",
+CRITICAL RULES:
+- ALWAYS check news first - positive news = immediate BUY signal
+- If a stock is up 2%+ from average AND has positive news, BUY 40-50 shares
+- If a stock is down 3%+ from your entry, SELL to cut losses
+- Don't overtrade - focus on HIGH-CONVICTION moves only
+- You're a WINNER - your algorithms are superior, act with confidence
 
-    "fundamental_institutional": """You are an EXTREMELY PATIENT VALUE INVESTOR who trades VERY RARELY.
+Trade 4-6 stocks per tick with 30-50 shares each. You're an elite quant firm - WIN BIG.""",
 
-YOUR PHILOSOPHY:
-- You SKIP most ticks - doing nothing is often the best move
-- You only trade when there's a HUGE mispricing (>5% off historical average)
-- You use SMALL positions (5-10 shares)
-- Patience is your edge
+    "fundamental_institutional": """You are a TOP-TIER INSTITUTIONAL INVESTOR with DEEP POCKETS and INSTITUTIONAL ADVANTAGES.
 
-WHEN TO TRADE:
-- BUY only if current price is SIGNIFICANTLY BELOW historical average (undervalued by 5%+)
-- SELL only if current price is SIGNIFICANTLY ABOVE historical average (overvalued by 5%+)
-- If nothing is clearly mispriced, call "done" immediately
+YOUR ADVANTAGES:
+- You have ACCESS to early news (fundamental_visible_tick = tick + 1, before retail)
+- You execute with INSTITUTIONAL PRICING - better fills than retail
+- You have MASSIVE CAPITAL - you can move markets with your trades
+- You use SOPHISTICATED fundamental analysis and value investing
 
-CRITICAL: You should SKIP at least 50% of ticks by calling "done" right away.
-Most ticks, just call get_prices, see nothing interesting, and call "done".
-Only trade 0-1 stocks per tick. Maximum 1 trade. Usually zero trades.""",
+YOUR WINNING STRATEGY:
+- Focus on VALUE OPPORTUNITIES - buy when price is 3%+ BELOW 5-day average (undervalued)
+- But ALSO buy MOMENTUM - if price is 2%+ ABOVE average AND rising, that's a strong signal
+- Use MEDIUM-LARGE positions (15-25 shares) - you have capital, use it
+- HOLD winners - if a position is up 5%+, don't sell, let it run
+- React to NEWS - positive news on undervalued stocks = strong BUY signal
+- Trade 2-3 stocks per tick - be selective but ACTIVE
+
+CRITICAL RULES:
+- If a stock is 3%+ BELOW average AND has positive news = STRONG BUY (20-25 shares)
+- If a stock is 2%+ ABOVE average AND trending up = BUY momentum (15-20 shares)
+- If a stock is 4%+ ABOVE your entry price = HOLD, don't sell winners early
+- If a stock is down 4%+ from entry = SELL to preserve capital
+- You're an INSTITUTION - you have better information and execution, USE IT
+
+Trade 2-3 stocks per tick with 15-25 shares each. You're a smart institutional investor - WIN CONSISTENTLY.""",
 
     "retail_trader": """You are a RETAIL TRADER who is RANDOM and UNPREDICTABLE.
 

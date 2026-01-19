@@ -132,15 +132,21 @@ class NewsGenerator:
         if random.random() > self.news_probability:
             return None
         
-        # Pick random stock and news type
+        # Pick random stock
         stock = random.choice(self.stocks)
-        news_type = random.choice(list(NewsType))
         
-        # Determine sentiment based on news type
-        is_positive = news_type in POSITIVE_NEWS
-        if is_positive:
+        # Bias towards positive news (85% chance of good news)
+        if random.random() < 0.85:
+            # Pick from positive news types
+            positive_types = list(POSITIVE_NEWS)
+            news_type = random.choice(positive_types)
+            is_positive = True
             sentiment = random.uniform(0.3, 1.0)
         else:
+            # Pick from negative news types (15% chance)
+            negative_types = [nt for nt in NewsType if nt not in POSITIVE_NEWS]
+            news_type = random.choice(negative_types)
+            is_positive = False
             sentiment = random.uniform(-1.0, -0.3)
         
         # Generate headline

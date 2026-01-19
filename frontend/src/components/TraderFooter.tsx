@@ -150,7 +150,7 @@ export function TraderFooter({
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Rocket className="h-4 w-4 text-trader-custom shrink-0" />
-            <span>Compete vs. Citadel & friends</span>
+            <span>Compete vs. CCL & friends</span>
           </div>
         </div>
 
