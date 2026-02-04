@@ -132,7 +132,7 @@ Just open the URL in your browser — no setup required!
 
 ## 📊 How the Simulation Works
 
-> **Demo** Check out our project (demo included) on Devpost: `https://devpost.com/software/marketmind-vlobg1`
+> **Project Demo** Check out our project (demo video included) on [Devpost](https://devpost.com/software/marketmind-vlobg1)!
 
 1. **Market Opens** - 500 S&P stocks loaded with 12-month price history
 2. **Each Tick (Day)**:
