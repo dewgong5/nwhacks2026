@@ -115,16 +115,13 @@ cd frontend
 
 # Install dependencies (npm or bun)
 npm install
-# or
-bun install
+
 
 # Start development server
 npm run dev
-# or
-bun dev
-```
 
-The frontend will start on `http://localhost:5173` (Vite default)
+
+The frontend will start on `http://localhost:8080` (Vite default)
 
 ---
 
@@ -220,7 +217,7 @@ nwhacks2026/
 
 ## 👥 Team
 
-Teammate: Dane, Timothy, Allen
+Teammate: Dane, Timothy, Yaolong
 
 Built with ❤️ at **nwHacks 2026**
 

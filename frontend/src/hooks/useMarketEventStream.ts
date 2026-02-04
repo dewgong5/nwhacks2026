@@ -13,7 +13,9 @@ import {
   AgentActivityPayload,
 } from '@/types/market';
 
-const WS_URL = 'ws://localhost:8000/ws';
+const WS_URL =
+  `${window.location.protocol === "https:" ? "wss" : "ws"}://` +
+  `${window.location.hostname}:8000/ws`;
 
 // Mock data generation removed - only WebSocket data is used
 
