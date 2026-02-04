@@ -1,4 +1,4 @@
-# 🎮 AI Trading Arena
+# 🎮 MarketMind - AI Trading Arena
 
 **A real-time stock market simulation game where you compete against AI-powered trading agents**
 
@@ -11,7 +11,7 @@
 
 ## 🚀 What Is This?
 
-AI Trading Arena is an interactive stock market simulation game built for **nwHacks 2026**. Watch AI agents from major financial institutions (Citadel, Jane Street, BlackRock, Vanguard) trade against each other in real-time, and create your own custom AI trading bot to compete!
+MarketMind is an AI-powered stock market simulation game built for **nwHacks 2026**. Watch AI agents from major financial institutions (Citadel, Jane Street, BlackRock, Vanguard) trade against each other in real-time, and create your own custom AI trading bot to compete!
 
 ### ✨ Key Features
 
@@ -221,6 +221,7 @@ nwhacks2026/
 ## 👥 Team
 
 Teammate: Dane, Timothy, Allen
+
 Built with ❤️ at **nwHacks 2026**
 
 ---
