@@ -119,7 +119,7 @@ npm install
 
 # Start development server
 npm run dev
-
+```
 
 The frontend will start on `http://localhost:8080` (Vite default)
 
