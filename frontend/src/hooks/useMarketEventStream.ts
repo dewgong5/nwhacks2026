@@ -4,18 +4,18 @@
 // NO MOCK DATA - Only uses WebSocket data
 // ============================================
 
-import { useEffect, useRef, useState } from 'react';
-import { 
-  MarketStore, 
-  MarketAction, 
-  MarketEvent,
-  SectorId,
-  AgentActivityPayload,
+import {
+    AgentActivityPayload,
+    MarketAction,
+    MarketEvent,
+    MarketStore,
+    SectorId,
 } from '@/types/market';
+import { useEffect, useRef, useState } from 'react';
 
 const WS_URL =
   `${window.location.protocol === "https:" ? "wss" : "ws"}://` +
-  `${window.location.hostname}:8000/ws`;
+  `${window.location.host}/ws`;
 
 // Mock data generation removed - only WebSocket data is used
 

@@ -105,7 +105,7 @@ pip install -r requirements.txt
 python server.py
 ```
 
-The backend will start on `http://localhost:8000`
+The backend will start on `http://127.0.0.1:8000` (localhost only, Nginx proxies traffic)
 
 ### Frontend Setup
 
@@ -127,13 +127,15 @@ The frontend will start on `http://localhost:8080` (Vite default)
 
 ## 🌐 Accessing the Server
 
-The application is deployed and accessible at:
+The application is deployed behind **Nginx** (all traffic goes through port 80):
 
 | Service | URL |
 |---------|-----|
-| **Frontend** | http://163.192.25.163:8080/ |
-| **Backend Health Check** | http://163.192.25.163:8000/ |
-| **WebSocket** | ws://163.192.25.163:8000/ws |
+| **Web App** | http://163.192.25.163/ |
+| **API** | http://163.192.25.163/api/... |
+| **WebSocket** | ws://163.192.25.163/ws |
+
+> **Note:** Backend (port 8000) only listens on `127.0.0.1` and is not directly accessible from the internet. Nginx proxies all requests.
 
 ### API Endpoints
 
