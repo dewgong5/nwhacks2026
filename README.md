@@ -46,7 +46,7 @@ MarketMind is an AI-powered stock market simulation game built for **nwHacks 202
 
 ### Gemini-Powered Chat Assistant
 - Ask about market conditions
-- Get trading advice (it's a game, so no disclaimers!)
+- Chat assistant gives in-game commentary and strategy suggestions for the simulation
 - AI knows live market data
 
 ---
@@ -86,48 +86,37 @@ MarketMind is an AI-powered stock market simulation game built for **nwHacks 202
 
 ## 🏃 How to Run
 
-### Prerequisites
+### Prerequisites for Option 1: Local Development
 - Python 3.11+
-- Node.js 18+ (or Bun)
+- Node.js 18+
 - OpenRouter API key (for trading agents)
 - Google GenAI API key (for chat)
 
-### Backend Setup
+---
+
+### 🖥️ Option 1: Local Development
+
+For **local testing only** — no Nginx needed.
 
 ```bash
-# Navigate to project root
+# Terminal 1: Backend
 cd nwhacks2026
-
-# Install Python dependencies
 pip install -r requirements.txt
+python3 server.py
 
-# Run the server
-python server.py
-```
-
-The backend will start on `http://127.0.0.1:8000` (localhost only, Nginx proxies traffic)
-
-### Frontend Setup
-
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies (npm or bun)
+# Terminal 2: Frontend
+cd nwhacks2026/frontend
 npm install
-
-
-# Start development server
 npm run dev
 ```
 
-The frontend will start on `http://localhost:8080` (Vite default)
+Then open `http://localhost:5173` in your browser.
 
 ---
 
-## 🌐 Accessing the Server
+### 🌐 Option 2: Use Live Server
 
-The application is deployed behind **Nginx** (all traffic goes through port 80):
+A live server is already running 24/7 on Oracle Cloud:
 
 | Service | URL |
 |---------|-----|
@@ -135,32 +124,9 @@ The application is deployed behind **Nginx** (all traffic goes through port 80):
 | **API** | http://163.192.25.163/api/... |
 | **WebSocket** | ws://163.192.25.163/ws |
 
-> **Note:** Backend (port 8000) only listens on `127.0.0.1` and is not directly accessible from the internet. Nginx proxies all requests.
+Just open the URL in your browser — no setup required!
 
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Health check - returns server status |
-| `/ws` | WebSocket | Real-time market data stream |
-| `/start` | POST | Manually start simulation (for testing) |
-| `/api/chat` | POST | Chat with AI trading consultant |
-
-### WebSocket Commands
-
-Connect to `/ws` and send:
-```json
-{
-  "command": "start_simulation",
-  "num_ticks": 10,
-  "tick_delay": 1.0,
-  "custom_agent": {
-    "name": "My Bot",
-    "prompt": "I am a momentum trader who buys rising stocks...",
-    "capital": 100000
-  }
-}
-```
+> **Server Info:** The server uses Nginx as a reverse proxy and runs the backend via tmux for continuous operation.
 
 ---
 
