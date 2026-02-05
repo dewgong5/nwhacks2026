@@ -283,7 +283,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                 "sentiment": "negative",
                 "tick": tick
             })
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.05)  # Minimal delay for dramatic effect
         else:
             print("\n📊 Market Movement:")
         
@@ -343,7 +343,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             }
             print(f"   📡 Broadcasting news: {news_payload}")
             await broadcast(news_payload)
-            await asyncio.sleep(0.5)  # Longer pause so news REALLY stands out
+            await asyncio.sleep(0.05)  # Minimal delay - news is already broadcast
             
             # Apply immediate price impact from news
             impact = news_event.sentiment * news_event.magnitude * 0.03  # Up to 3% move
@@ -361,37 +361,71 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                 "sentiment": "positive" if news_event.sentiment > 0 else "negative",
             }
         
-        # LLM agents decide (institutional) - STREAM EVENTS IMMEDIATELY
+        # LLM agents decide (institutional) - PARALLELIZED for speed
         # Quants see news IMMEDIATELY, fundamentals see it 1 tick later
         llm_agents = [
             (ccl, "CCL", "🏦", "quant"), (jane_street, "JANE STREET", "🏦", "quant"),
             (blackrock, "BLACKROCK", "📊", "fundamental"), (vanguard, "VANGUARD", "📊", "fundamental")
         ]
-        for agent, name, emoji, agent_type in llm_agents:
-            print(f"\n[{emoji} {name} thinking...]")
+        
+        # Helper function to run agent.decide() in thread pool with timeout
+        async def decide_with_timeout(agent, name, emoji, agent_type, tick, news_for_agent, timeout=8.0):
+            """Run agent.decide() in a thread pool with timeout and fallback."""
             try:
-                # Quants see news immediately, fundamentals don't (they analyze first)
-                news_for_agent = current_news if agent_type == "quant" else None
-                if news_for_agent:
-                    print(f"  📰 {name} sees breaking news about {news_for_agent['stock']}!")
+                # Run blocking decide() call in thread pool
+                # Use functools.partial or direct call to avoid lambda closure issues
+                def run_decide():
+                    return agent.decide(tick, news=news_for_agent)
                 
-                actions = agent.decide(tick, news=news_for_agent)
-                trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
-                if trades:
-                    for action in trades:
-                        tool = action["tool"].get("tool")
-                        args = action["tool"].get("args", {})
-                        ticker_sym = args.get('ticker', '?')
-                        size = args.get('size', 0)
-                        action_text = "BUYS" if tool == "buy" else "SELLS"
-                        event = f"{emoji} {name} {action_text} {size} {ticker_sym}"
-                        print(f"  {event}")
-                        await broadcast({"event": event})
-                        await asyncio.sleep(0.1)  # Small delay between events
-                else:
-                    print("  (no trades)")
+                loop = asyncio.get_event_loop()
+                actions = await asyncio.wait_for(
+                    loop.run_in_executor(None, run_decide),
+                    timeout=timeout
+                )
+                return (agent, name, emoji, agent_type, actions, None)
+            except asyncio.TimeoutError:
+                print(f"  ⏱️ {name} timed out after {timeout}s - using fallback (hold)")
+                # Fallback: return empty actions (agent holds)
+                return (agent, name, emoji, agent_type, [], "timeout")
             except Exception as e:
-                print(f"  Error: {e}")
+                print(f"  ❌ {name} error: {e}")
+                return (agent, name, emoji, agent_type, [], str(e))
+        
+        # Run all LLM agents in parallel
+        print(f"\n[🤖 All LLM agents thinking in parallel...]")
+        tasks = []
+        for agent, name, emoji, agent_type in llm_agents:
+            news_for_agent = current_news if agent_type == "quant" else None
+            if news_for_agent:
+                print(f"  📰 {name} will see breaking news about {news_for_agent['stock']}!")
+            tasks.append(decide_with_timeout(agent, name, emoji, agent_type, tick, news_for_agent))
+        
+        # Wait for all agents to finish (or timeout)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results and stream events
+        for result in results:
+            if isinstance(result, Exception):
+                print(f"  ❌ Agent task exception: {result}")
+                continue
+            
+            agent, name, emoji, agent_type, actions, error = result
+            if error:
+                continue  # Already logged
+            
+            trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
+            if trades:
+                for action in trades:
+                    tool = action["tool"].get("tool")
+                    args = action["tool"].get("args", {})
+                    ticker_sym = args.get('ticker', '?')
+                    size = args.get('size', 0)
+                    action_text = "BUYS" if tool == "buy" else "SELLS"
+                    event = f"{emoji} {name} {action_text} {size} {ticker_sym}"
+                    print(f"  {event}")
+                    await broadcast({"event": event})
+            else:
+                print(f"  {emoji} {name}: (no trades)")
         
         # Dumb retail agents decide - STREAM EVENTS WITH DELAY
         retail_agents = [
@@ -410,13 +444,13 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                         event = f"{emoji} {name} {action_text}"
                         print(f"  {action_text}")
                         await broadcast({"event": event})
-                        await asyncio.sleep(0.15)  # Delay to match console pace
+                        # Removed sleep - events stream immediately
                     else:
                         print(f"  {action_text}")
             else:
                 print("  (holding)")
         
-        # Custom agent decides - STREAM EVENTS WITH DELAY
+        # Custom agent decides - PARALLELIZED (runs concurrently with retail agents)
         # Custom agent sees news (like retail, slight delay but still sees it)
         if my_agent:
             print(f"\n[🎮 {my_agent_name} thinking...]")
@@ -424,21 +458,32 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                 # Custom agents see news (so users can see their agent react)
                 if current_news:
                     print(f"  📰 {my_agent_name} sees breaking news about {current_news['stock']}!")
-                actions = my_agent.decide(tick, news=current_news)
-                trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
-                if trades:
-                    for action in trades:
-                        tool = action["tool"].get("tool")
-                        args = action["tool"].get("args", {})
-                        ticker_sym = args.get('ticker', '?')
-                        size = args.get('size', 0)
-                        action_text = "BUYS" if tool == "buy" else "SELLS"
-                        event = f"🎮 {my_agent_name} {action_text} {size} {ticker_sym}"
-                        print(f"  {event}")
-                        await broadcast({"event": event})
-                        await asyncio.sleep(0.1)  # Small delay between events
-                else:
-                    print("  (no trades)")
+                
+                # Run custom agent in thread pool with timeout (same as LLM agents)
+                def run_custom_decide():
+                    return my_agent.decide(tick, news=current_news)
+                
+                loop = asyncio.get_event_loop()
+                try:
+                    actions = await asyncio.wait_for(
+                        loop.run_in_executor(None, run_custom_decide),
+                        timeout=8.0
+                    )
+                    trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
+                    if trades:
+                        for action in trades:
+                            tool = action["tool"].get("tool")
+                            args = action["tool"].get("args", {})
+                            ticker_sym = args.get('ticker', '?')
+                            size = args.get('size', 0)
+                            action_text = "BUYS" if tool == "buy" else "SELLS"
+                            event = f"🎮 {my_agent_name} {action_text} {size} {ticker_sym}"
+                            print(f"  {event}")
+                            await broadcast({"event": event})
+                    else:
+                        print("  (no trades)")
+                except asyncio.TimeoutError:
+                    print(f"  ⏱️ {my_agent_name} timed out - using fallback (hold)")
             except Exception as e:
                 print(f"  Error: {e}")
         
@@ -504,8 +549,8 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             "top_losers": losers
         })
         
-        # Wait before next tick
-        await asyncio.sleep(tick_delay)
+        # Minimal delay before next tick (reduced from tick_delay for speed)
+        await asyncio.sleep(0.05)
     
     # Simulation complete - calculate final P&L for all agents
     print(f"\nFinal price: {market_index:.2f}")
@@ -671,7 +716,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 # Gemini API key and client
-GEMINI_API_KEY = "AIzaSyDKFwcogxxhLuqOo7syAYSSqVqnGDi2A6A"
+GEMINI_API_KEY = "AIzaSyCj30VDK23SLM9wA7wS6HHQmTgdQbXAwnY"
 
 # Initialize Gemini client for chatbot ONLY (agents use OpenRouter)
 try:

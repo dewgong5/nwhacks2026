@@ -604,8 +604,8 @@ export function useMarketEventStream(
     
     const startCommand: any = {
       command: "start_simulation",
-      num_ticks: 5,
-      tick_delay: 1.0
+      num_ticks: 10,
+      tick_delay: 0.1  // Reduced from 1.0 for faster simulation
     };
     
     if (customAgent && customAgent.prompt) {

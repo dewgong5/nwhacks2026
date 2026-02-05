@@ -11,7 +11,7 @@ class TradingAgent:
     """An LLM-powered trading agent that uses OpenRouter to make decisions."""
     
     # Hardcoded API key
-    API_KEY = "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"
+    API_KEY = "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"
     
     def __init__(
         self,
