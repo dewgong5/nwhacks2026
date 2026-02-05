@@ -3,13 +3,13 @@
 // Professional LLM-powered trading advisor
 // ============================================
 
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Bot, Loader2, Send, User } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 // Simple markdown renderer
 function renderMarkdown(text: string) {
@@ -61,7 +61,7 @@ interface TradingConsultantProps {
   className?: string;
 }
 
-const API_ENDPOINT = import.meta.env.VITE_CHAT_API_URL || 'http://localhost:8000/api/chat';
+const API_ENDPOINT = '/api/chat';
 
 export function TradingConsultant({ className }: TradingConsultantProps) {
   const [messages, setMessages] = useState<Message[]>([

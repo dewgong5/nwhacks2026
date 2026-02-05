@@ -665,7 +665,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 # Gemini API key and client
-GEMINI_API_KEY = "AIzaSyDKFwcogxxhLuqOo7syAYSSqVqnGDi2A6A"
+GEMINI_API_KEY = "AIzaSyCr3tKw2Ep4nPF4CezguHiM3Xu14BaVDO8"
 
 # Initialize Gemini client for chatbot ONLY (agents use OpenRouter)
 from google import genai
@@ -873,4 +873,4 @@ if __name__ == "__main__":
     print('  }')
     print("=" * 60)
     
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
