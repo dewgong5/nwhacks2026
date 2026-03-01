@@ -120,7 +120,7 @@ A live server is already running 24/7 on Oracle Cloud:
 
 | Service | URL |
 |---------|-----|
-| **Web App** | http://163.192.25.163/ |
+| **Web App** | http://163.192.25.163/ or http://[2603:c024:c01a:c001:0:ffbf:5e67:1b2b]/ |
 | **API** | http://163.192.25.163/api/... |
 | **WebSocket** | ws://163.192.25.163/ws |
 

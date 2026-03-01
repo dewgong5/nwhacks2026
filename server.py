@@ -3,11 +3,17 @@ WebSocket API Server - Streams market simulation data in real-time.
 """
 
 import asyncio
+import os
 import json
+import time
+import hmac
+import hashlib
+from collections import deque
 from typing import Set
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from pathlib import Path
 
 from orchestration import SimulationOrchestrator, Side
 from order_book import create_order_books
@@ -44,6 +50,43 @@ current_market_state = {
     "tick": 0,
     "is_running": False,
 }
+
+
+
+def _load_ws_token() -> str:
+    token = os.getenv("WS_TOKEN", "").strip()
+    if token:
+        return token
+    env_path = Path(__file__).with_name(".env")
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("WS_TOKEN="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
+WS_TOKEN = _load_ws_token()
+WS_MAX_MSG_BYTES = int(os.getenv("WS_MAX_MSG_BYTES", "8192"))
+WS_MAX_MSG_PER_SEC = int(os.getenv("WS_MAX_MSG_PER_SEC", "10"))
+WS_TICKET_TTL = int(os.getenv("WS_TICKET_TTL", "60"))
+
+
+class PerConnRateLimiter:
+    def __init__(self, max_per_sec: int):
+        self.max_per_sec = max_per_sec
+        self.ts = deque()
+
+    def allow(self) -> bool:
+        now = time.time()
+        while self.ts and self.ts[0] <= now - 1.0:
+            self.ts.popleft()
+        if len(self.ts) >= self.max_per_sec:
+            return False
+        self.ts.append(now)
+        return True
 
 
 def load_stocks(csv_path="stocks_sp500.csv"):
@@ -575,35 +618,97 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
 simulation_task = None
 
 
+def _client_ip_from_headers(headers, fallback: str) -> str:
+    xff = headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return fallback
+
+
+def _make_ws_ticket_sig(ip: str, ts: int) -> str:
+    msg = f"{ip}:{ts}".encode()
+    return hmac.new(WS_TOKEN.encode(), msg, hashlib.sha256).hexdigest()
+
+
+@app.get("/ws-ticket")
+async def ws_ticket(request: Request):
+    ip = _client_ip_from_headers(request.headers, request.client.host)
+    ts = int(time.time())
+    sig = _make_ws_ticket_sig(ip, ts)
+    return {"ts": ts, "sig": sig, "ttl": WS_TICKET_TTL}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for streaming market data."""
+    token = websocket.query_params.get("token") or websocket.headers.get("x-ws-token")
+
+    authorized = False
+    if WS_TOKEN and token == WS_TOKEN:
+        authorized = True
+    else:
+        ts_raw = websocket.query_params.get("ts")
+        sig = websocket.query_params.get("sig")
+        if WS_TOKEN and ts_raw and sig:
+            try:
+                ts = int(ts_raw)
+                if abs(int(time.time()) - ts) <= WS_TICKET_TTL:
+                    ip = _client_ip_from_headers(websocket.headers, websocket.client.host)
+                    expected = _make_ws_ticket_sig(ip, ts)
+                    authorized = hmac.compare_digest(expected, sig)
+            except Exception:
+                authorized = False
+
+    if not authorized:
+        await websocket.accept()
+        await websocket.close(code=1008, reason="unauthorized")
+        return
+
     await websocket.accept()
     connected_clients.add(websocket)
     print(f"Client connected. Total clients: {len(connected_clients)}")
-    
+    limiter = PerConnRateLimiter(WS_MAX_MSG_PER_SEC)
+
     try:
         # Send welcome message
         await websocket.send_json({
             "type": "connected",
             "message": "Connected to Market Simulation API"
         })
-        
+
         # Keep connection alive and handle incoming messages
         while True:
             try:
-                data = await asyncio.wait_for(websocket.receive_json(), timeout=60.0)
-                
+                frame = await asyncio.wait_for(websocket.receive(), timeout=60.0)
+
+                # Reject binary/unsupported payloads
+                msg_text = frame.get("text")
+                if msg_text is None:
+                    await websocket.close(code=1003, reason="unsupported data")
+                    return
+
+                # Per-message size limit
+                if len(msg_text.encode("utf-8")) > WS_MAX_MSG_BYTES:
+                    await websocket.close(code=1009, reason="message too big")
+                    return
+
+                # Per-connection message rate limit
+                if not limiter.allow():
+                    await websocket.close(code=1013, reason="rate limited")
+                    return
+
+                data = json.loads(msg_text)
+
                 # Handle client commands
                 if data.get("command") == "start_simulation":
                     global simulation_task
                     num_ticks = data.get("num_ticks", 5)
                     tick_delay = data.get("tick_delay", 1.0)
-                    
+
                     # Extract custom agent config if provided
                     custom_agent_config = data.get("custom_agent")
                     # custom_agent format: {"name": "My Bot", "prompt": "I am a momentum trader..."}
-                    
+
                     if simulation_task is None or simulation_task.done():
                         simulation_task = asyncio.create_task(
                             run_simulation_streaming(num_ticks, tick_delay, custom_agent_config)
@@ -618,11 +723,14 @@ async def websocket_endpoint(websocket: WebSocket):
                             "type": "error",
                             "message": "Simulation already running"
                         })
-                        
+
             except asyncio.TimeoutError:
                 # Send ping to keep connection alive
                 await websocket.send_json({"type": "ping"})
-                
+            except json.JSONDecodeError:
+                await websocket.close(code=1003, reason="invalid json")
+                return
+
     except WebSocketDisconnect:
         pass
     finally:
