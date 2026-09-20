@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { useMarketStore, selectIndex, selectTopPerformers, selectBottomPerformers } from '@/store/marketStore';
+import { useMarketStore, selectIndex, selectTopMovers } from '@/store/marketStore';
 import { TraderResult } from '@/types/trading';
 import { cn } from '@/lib/utils';
 
@@ -30,20 +30,24 @@ interface PostMarketAnalysisProps {
 export function PostMarketAnalysis({ isOpen, onClose, onRestart, userTrader }: PostMarketAnalysisProps) {
   const { state } = useMarketStore();
   const index = selectIndex(state);
-  const topPerformers = selectTopPerformers(state, 3);
-  const bottomPerformers = selectBottomPerformers(state, 3);
+  const topMovers = selectTopMovers(state);
+  
+  // Get top 3 gainers and top 3 losers (stocks, not sectors)
+  const topStocks = topMovers.gainers.slice(0, 3);
+  const bottomStocks = topMovers.losers.slice(0, 3);
   
   // Find user's agent in leaderboard to get actual P&L
   const userAgentResult = state.simulationResults?.leaderboard?.find(
     a => a.id === 'my_agent' || a.type === 'custom'
   );
   
-  // Get leaderboard sorted by P&L % (already sorted this way from backend)
-  const topByPnlPct = state.simulationResults?.leaderboard?.slice(0, 3) || [];
+  // Get leaderboard sorted by absolute profit $ (already sorted this way from backend)
+  // Large capital agents (quants, institutions) are prioritized
+  const topByProfit = state.simulationResults?.leaderboard?.slice(0, 3) || [];
   
-  // Get leaderboard sorted by absolute profit $
-  const topByProfit = state.simulationResults?.leaderboard
-    ? [...state.simulationResults.leaderboard].sort((a, b) => b.pnl - a.pnl).slice(0, 3)
+  // Get leaderboard sorted by P&L % for comparison
+  const topByPnlPct = state.simulationResults?.leaderboard
+    ? [...state.simulationResults.leaderboard].sort((a, b) => b.pnl_pct - a.pnl_pct).slice(0, 3)
     : [];
   
   return (
@@ -151,46 +155,60 @@ export function PostMarketAnalysis({ isOpen, onClose, onRestart, userTrader }: P
             </div>
           </motion.div>
           
-          {/* Sector Highlights */}
+          {/* Stock Highlights */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
-            {/* Top Performers */}
+            {/* Top Gainers (Stocks) */}
             <div className="glass-card p-4">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp size={14} className="text-gain" />
-                <h4 className="text-sm font-semibold">Top Performers</h4>
+                <h4 className="text-sm font-semibold">Top Gainers</h4>
               </div>
               <div className="space-y-2">
-                {topPerformers.map((sector, i) => (
-                  <div key={sector.id} className="flex justify-between items-center">
-                    <span className="text-sm truncate">{sector.label}</span>
-                    <span className="text-sm font-mono text-gain">
-                      +{sector.changePercent.toFixed(2)}%
-                    </span>
-                  </div>
-                ))}
+                {topStocks.length > 0 ? (
+                  topStocks.map((stock, i) => (
+                    <div key={stock.ticker} className="flex justify-between items-center">
+                      <span className="text-sm font-medium truncate">{stock.ticker}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">${stock.price.toFixed(2)}</span>
+                        <span className="text-sm font-mono text-gain">
+                          +{stock.change.toFixed(2)}%
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground">No gainers available</p>
+                )}
               </div>
             </div>
             
-            {/* Bottom Performers */}
+            {/* Top Losers (Stocks) */}
             <div className="glass-card p-4">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingDown size={14} className="text-loss" />
-                <h4 className="text-sm font-semibold">Laggards</h4>
+                <h4 className="text-sm font-semibold">Top Losers</h4>
               </div>
               <div className="space-y-2">
-                {bottomPerformers.map((sector, i) => (
-                  <div key={sector.id} className="flex justify-between items-center">
-                    <span className="text-sm truncate">{sector.label}</span>
-                    <span className="text-sm font-mono text-loss">
-                      {sector.changePercent.toFixed(2)}%
-                    </span>
-                  </div>
-                ))}
+                {bottomStocks.length > 0 ? (
+                  bottomStocks.map((stock, i) => (
+                    <div key={stock.ticker} className="flex justify-between items-center">
+                      <span className="text-sm font-medium truncate">{stock.ticker}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">${stock.price.toFixed(2)}</span>
+                        <span className="text-sm font-mono text-loss">
+                          {stock.change.toFixed(2)}%
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground">No losers available</p>
+                )}
               </div>
             </div>
           </motion.div>

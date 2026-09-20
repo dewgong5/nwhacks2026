@@ -89,7 +89,7 @@ def run_simulation():
     
     # Register agents
     # Quant hedge funds (the smart money)
-    orchestrator.register_agent("citadel", initial_cash=1000000.0)
+    orchestrator.register_agent("ccl", initial_cash=1000000.0)
     orchestrator.register_agent("jane_street", initial_cash=1000000.0)
     # Fundamental asset managers (patient money)
     orchestrator.register_agent("blackrock", initial_cash=2000000.0)
@@ -109,7 +109,7 @@ def run_simulation():
     # Give starting shares
     for ticker in tickers:
         # Quants - big positions
-        orchestrator._agent_portfolios["citadel"].positions[ticker] = 200
+        orchestrator._agent_portfolios["ccl"].positions[ticker] = 200
         orchestrator._agent_portfolios["jane_street"].positions[ticker] = 200
         # Fundamentals - medium positions
         orchestrator._agent_portfolios["blackrock"].positions[ticker] = 100
@@ -131,7 +131,7 @@ def run_simulation():
     MODEL = "google/gemini-2.0-flash-001"
     
     # LLM agents (institutional)
-    citadel = create_agent("citadel", orchestrator, "quant_institutional", MODEL, stock_history)
+    ccl = create_agent("ccl", orchestrator, "quant_institutional", MODEL, stock_history)
     jane_street = create_agent("jane_street", orchestrator, "quant_institutional", MODEL, stock_history)
     blackrock = create_agent("blackrock", orchestrator, "fundamental_institutional", MODEL, stock_history)
     vanguard = create_agent("vanguard", orchestrator, "fundamental_institutional", MODEL, stock_history)
@@ -148,7 +148,7 @@ def run_simulation():
     if ENABLE_CUSTOM_AGENT:
         my_agent = create_custom_agent("my_agent", orchestrator, MY_STRATEGY, MODEL, stock_history)
     
-    print(f"  🏦 CITADEL & JANE STREET: Quant algos, $1M each")
+    print(f"  🏦 CCL & JANE STREET: Quant algos, $1M each")
     print(f"  📊 BLACKROCK & VANGUARD: Patient value investors, $2M each")
     print(f"  👤 RETAIL_HOLDER x4: Conservative dumb retail, $50k each")
     print(f"  🎰 RETAIL_DAYTRADER: Aggressive dumb retail, $50k")
@@ -156,7 +156,7 @@ def run_simulation():
         print(f"  🎮 MY_AGENT: YOUR custom strategy, ${CUSTOM_AGENT_CASH:,.0f}")
     
     # Calculate starting values
-    all_agents = ["citadel", "jane_street", "blackrock", "vanguard",
+    all_agents = ["ccl", "jane_street", "blackrock", "vanguard",
                   "retail_holder_1", "retail_holder_2", "retail_holder_3", "retail_holder_4", "retail_daytrader"]
     if ENABLE_CUSTOM_AGENT:
         all_agents.append("my_agent")
@@ -184,7 +184,7 @@ def run_simulation():
         
         # LLM agents decide (institutional)
         llm_agents = [
-            (citadel, "CITADEL", "🏦"), (jane_street, "JANE STREET", "🏦"),
+            (ccl, "CCL", "🏦"), (jane_street, "JANE STREET", "🏦"),
             (blackrock, "BLACKROCK", "📊"), (vanguard, "VANGUARD", "📊")
         ]
         for agent, name, emoji in llm_agents:
@@ -249,7 +249,7 @@ def run_simulation():
     
     results = []
     agent_emojis = {
-        "citadel": "🏦", "jane_street": "🏦",
+        "ccl": "🏦", "jane_street": "🏦",
         "blackrock": "📊", "vanguard": "📊",
         "retail_holder_1": "👤", "retail_holder_2": "👤",
         "retail_holder_3": "👤", "retail_holder_4": "👤",

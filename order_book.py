@@ -183,22 +183,22 @@ def create_order_books(
     """Create OrderBook instances for multiple stocks.
     
     Each stock gets a random trend bias:
-    - ~40% stocks are bullish (go up)
-    - ~40% stocks are bearish (go down)
-    - ~20% stocks are neutral (random walk)
+    - ~85% stocks are bullish (go up)
+    - ~10% stocks are bearish (go down)
+    - ~5% stocks are neutral (random walk)
     """
     initial_prices = initial_prices or {}
     books = {}
     
     for stock_id in stock_ids:
-        # Assign random trend: some winners, some losers
+        # Assign random trend: very heavily biased towards bullish
         trend_roll = random.random()
-        if trend_roll < 0.4:
-            # Bullish stock: +0.5% to +2% per tick
-            trend_bias = random.uniform(0.005, 0.02)
-        elif trend_roll < 0.8:
-            # Bearish stock: -0.5% to -2% per tick  
-            trend_bias = random.uniform(-0.02, -0.005)
+        if trend_roll < 0.85:
+            # Bullish stock: +0.5% to +2.5% per tick (slightly higher range)
+            trend_bias = random.uniform(0.005, 0.025)
+        elif trend_roll < 0.95:
+            # Bearish stock: -0.3% to -1% per tick (weaker bearish moves)
+            trend_bias = random.uniform(-0.01, -0.003)
         else:
             # Neutral: random walk
             trend_bias = 0.0

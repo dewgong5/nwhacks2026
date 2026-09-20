@@ -38,7 +38,7 @@ connected_clients: Set[WebSocket] = set()
 
 # Global market state for chat context
 current_market_state = {
-    "market_index": 100.0,
+    "market_index": 5500.0,
     "top_gainers": [],
     "top_losers": [],
     "tick": 0,
@@ -77,17 +77,17 @@ def load_stocks(csv_path="stocks_sp500.csv"):
 
 def calculate_market_index(initial_prices: dict, current_prices: dict) -> float:
     """
-    Calculate price-weighted market index (like Dow Jones).
-    Returns index value starting at 100.
+    Calculate market-cap-weighted index (like S&P 500).
+    Returns index value starting at 5500 (realistic S&P 500 range).
     """
-    # Divisor is set so index starts at 100
+    # Divisor is set so index starts at 5500
     start_total = sum(initial_prices.values())
     current_total = sum(current_prices.values())
     
     if start_total == 0:
-        return 100.0
+        return 5500.0
     
-    return 100.0 * (current_total / start_total)
+    return 5500.0 * (current_total / start_total)
 
 
 async def broadcast(message: dict):
@@ -110,7 +110,7 @@ async def broadcast(message: dict):
 
 
 async def run_simulation_streaming(
-    num_ticks: int = 5, 
+    num_ticks: int = 10, 
     tick_delay: float = 1.0,
     custom_agent_config: dict = None
 ):
@@ -122,7 +122,7 @@ async def run_simulation_streaming(
         custom_agent_config: Optional config for custom agent:
             - name: Display name for the agent
             - prompt: Custom system prompt for trading strategy
-            - capital: Starting capital (default: 100000)
+            - capital: Starting capital (default: 5000)
     """
     global current_market_state
     
@@ -149,10 +149,10 @@ async def run_simulation_streaming(
         orchestrator.register_stock(ticker, book)
     
     # Register agents
-    orchestrator.register_agent("citadel", initial_cash=1000000.0)
-    orchestrator.register_agent("jane_street", initial_cash=1000000.0)
-    orchestrator.register_agent("blackrock", initial_cash=2000000.0)
-    orchestrator.register_agent("vanguard", initial_cash=2000000.0)
+    orchestrator.register_agent("ccl", initial_cash=10000000.0)
+    orchestrator.register_agent("jane_street", initial_cash=10000000.0)
+    orchestrator.register_agent("blackrock", initial_cash=20000000.0)
+    orchestrator.register_agent("vanguard", initial_cash=20000000.0)
     orchestrator.register_agent("retail_1", initial_cash=50000.0)
     orchestrator.register_agent("retail_2", initial_cash=50000.0)
     orchestrator.register_agent("retail_3", initial_cash=50000.0)
@@ -160,7 +160,7 @@ async def run_simulation_streaming(
     orchestrator.register_agent("retail_daytrader", initial_cash=50000.0)
     
     # Custom agent - use capital from config if provided, default to $100k
-    custom_capital = 100000.0
+    custom_capital = 50000.0
     if custom_agent_config and custom_agent_config.get("capital"):
         custom_capital = float(custom_agent_config["capital"])
     orchestrator.register_agent("my_agent", initial_cash=custom_capital)
@@ -175,7 +175,7 @@ async def run_simulation_streaming(
     
     # Give starting shares - institutions get ALL stocks
     for ticker in tickers:
-        orchestrator._agent_portfolios["citadel"].positions[ticker] = 200
+        orchestrator._agent_portfolios["ccl"].positions[ticker] = 200
         orchestrator._agent_portfolios["jane_street"].positions[ticker] = 200
         orchestrator._agent_portfolios["blackrock"].positions[ticker] = 100
         orchestrator._agent_portfolios["vanguard"].positions[ticker] = 100
@@ -210,7 +210,7 @@ async def run_simulation_streaming(
     # Create agents
     MODEL = "google/gemini-2.0-flash-001"
     
-    citadel = create_agent("citadel", orchestrator, "quant_institutional", MODEL, stock_history)
+    ccl = create_agent("ccl", orchestrator, "quant_institutional", MODEL, stock_history)
     jane_street = create_agent("jane_street", orchestrator, "quant_institutional", MODEL, stock_history)
     blackrock = create_agent("blackrock", orchestrator, "fundamental_institutional", MODEL, stock_history)
     vanguard = create_agent("vanguard", orchestrator, "fundamental_institutional", MODEL, stock_history)
@@ -243,7 +243,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
 """
         my_agent = create_custom_agent("my_agent", orchestrator, MY_STRATEGY, MODEL, stock_history)
     
-    all_agents = ["citadel", "jane_street", "blackrock", "vanguard", 
+    all_agents = ["ccl", "jane_street", "blackrock", "vanguard", 
                   "retail_1", "retail_2", "retail_3", "retail_4", "retail_daytrader", "my_agent"]
     
     # Calculate starting values
@@ -254,10 +254,10 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         start_values[agent_id] = total
     
     # Send simulation start
-    await broadcast({"price": 100.0})
+    await broadcast({"price": 5500.0})
     
     # Initialize news generator
-    news_generator = NewsGenerator(tickers, news_probability=0.10)  # 10% chance per tick (less frequent)
+    news_generator = NewsGenerator(tickers, news_probability=0.85)  # 85% chance per tick (very frequent - lots of news!)
     
     SPREAD_PCT = 0.002
     MM_SIZE = 100
@@ -271,8 +271,8 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         # Apply random price fluctuations to ALL stocks at start of tick
         # This simulates natural market movement (other traders, sentiment, macro events)
         
-        # One bear market crash on tick 2 (Day 3)
-        is_crash_tick = (tick == 2)
+        # Random bear market crash with extremely low probability (0.1% chance per tick, but only after tick 1)
+        is_crash_tick = (tick > 1 and random.random() < 0.001)  # 0.1% chance after first tick
         
         if is_crash_tick:
             print("\n🐻 BEAR MARKET DAY! 📉")
@@ -283,7 +283,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                 "sentiment": "negative",
                 "tick": tick
             })
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.05)  # Minimal delay for dramatic effect
         else:
             print("\n📊 Market Movement:")
         
@@ -296,7 +296,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                 order_books[ticker]._last_price *= (1 + crash_pct)
                 pct_change = crash_pct * 100
             else:
-                # Normal volatility - BEARISH baseline (-1.5% mean drift)
+                # Normal volatility - BULLISH bias (70% stocks trending up)
                 pct_change = order_books[ticker].apply_tick_volatility(base_volatility=0.03)
             
             if abs(pct_change) > 1.0:  # Only log big moves (>1%)
@@ -316,7 +316,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             orchestrator.submit_order("market_maker", ticker, Side.BUY, round(last_price - spread/2, 2), MM_SIZE)
             orchestrator.submit_order("market_maker", ticker, Side.SELL, round(last_price + spread/2, 2), MM_SIZE)
         
-        # Generate news event RIGHT BEFORE agents start (guaranteed on tick 0, 40% chance after)
+        # Generate news event RIGHT BEFORE agents start (guaranteed on tick 0, higher chance after)
         if tick == 0:
             # Force news on first tick for dramatic opening
             old_prob = news_generator.news_probability
@@ -325,6 +325,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             news_generator.news_probability = old_prob
             print(f"   🎯 Tick 0 forced news: {news_event}")
         else:
+            # Increased probability for more frequent news
             news_event = news_generator.maybe_generate_news(tick)
             print(f"   🎲 Random news check: {news_event is not None}")
         
@@ -342,7 +343,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             }
             print(f"   📡 Broadcasting news: {news_payload}")
             await broadcast(news_payload)
-            await asyncio.sleep(0.5)  # Longer pause so news REALLY stands out
+            await asyncio.sleep(0.05)  # Minimal delay - news is already broadcast
             
             # Apply immediate price impact from news
             impact = news_event.sentiment * news_event.magnitude * 0.03  # Up to 3% move
@@ -360,37 +361,71 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                 "sentiment": "positive" if news_event.sentiment > 0 else "negative",
             }
         
-        # LLM agents decide (institutional) - STREAM EVENTS IMMEDIATELY
+        # LLM agents decide (institutional) - PARALLELIZED for speed
         # Quants see news IMMEDIATELY, fundamentals see it 1 tick later
         llm_agents = [
-            (citadel, "CITADEL", "🏦", "quant"), (jane_street, "JANE STREET", "🏦", "quant"),
+            (ccl, "CCL", "🏦", "quant"), (jane_street, "JANE STREET", "🏦", "quant"),
             (blackrock, "BLACKROCK", "📊", "fundamental"), (vanguard, "VANGUARD", "📊", "fundamental")
         ]
-        for agent, name, emoji, agent_type in llm_agents:
-            print(f"\n[{emoji} {name} thinking...]")
+        
+        # Helper function to run agent.decide() in thread pool with timeout
+        async def decide_with_timeout(agent, name, emoji, agent_type, tick, news_for_agent, timeout=8.0):
+            """Run agent.decide() in a thread pool with timeout and fallback."""
             try:
-                # Quants see news immediately, fundamentals don't (they analyze first)
-                news_for_agent = current_news if agent_type == "quant" else None
-                if news_for_agent:
-                    print(f"  📰 {name} sees breaking news about {news_for_agent['stock']}!")
+                # Run blocking decide() call in thread pool
+                # Use functools.partial or direct call to avoid lambda closure issues
+                def run_decide():
+                    return agent.decide(tick, news=news_for_agent)
                 
-                actions = agent.decide(tick, news=news_for_agent)
-                trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
-                if trades:
-                    for action in trades:
-                        tool = action["tool"].get("tool")
-                        args = action["tool"].get("args", {})
-                        ticker_sym = args.get('ticker', '?')
-                        size = args.get('size', 0)
-                        action_text = "BUYS" if tool == "buy" else "SELLS"
-                        event = f"{emoji} {name} {action_text} {size} {ticker_sym}"
-                        print(f"  {event}")
-                        await broadcast({"event": event})
-                        await asyncio.sleep(0.1)  # Small delay between events
-                else:
-                    print("  (no trades)")
+                loop = asyncio.get_event_loop()
+                actions = await asyncio.wait_for(
+                    loop.run_in_executor(None, run_decide),
+                    timeout=timeout
+                )
+                return (agent, name, emoji, agent_type, actions, None)
+            except asyncio.TimeoutError:
+                print(f"  ⏱️ {name} timed out after {timeout}s - using fallback (hold)")
+                # Fallback: return empty actions (agent holds)
+                return (agent, name, emoji, agent_type, [], "timeout")
             except Exception as e:
-                print(f"  Error: {e}")
+                print(f"  ❌ {name} error: {e}")
+                return (agent, name, emoji, agent_type, [], str(e))
+        
+        # Run all LLM agents in parallel
+        print(f"\n[🤖 All LLM agents thinking in parallel...]")
+        tasks = []
+        for agent, name, emoji, agent_type in llm_agents:
+            news_for_agent = current_news if agent_type == "quant" else None
+            if news_for_agent:
+                print(f"  📰 {name} will see breaking news about {news_for_agent['stock']}!")
+            tasks.append(decide_with_timeout(agent, name, emoji, agent_type, tick, news_for_agent))
+        
+        # Wait for all agents to finish (or timeout)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results and stream events
+        for result in results:
+            if isinstance(result, Exception):
+                print(f"  ❌ Agent task exception: {result}")
+                continue
+            
+            agent, name, emoji, agent_type, actions, error = result
+            if error:
+                continue  # Already logged
+            
+            trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
+            if trades:
+                for action in trades:
+                    tool = action["tool"].get("tool")
+                    args = action["tool"].get("args", {})
+                    ticker_sym = args.get('ticker', '?')
+                    size = args.get('size', 0)
+                    action_text = "BUYS" if tool == "buy" else "SELLS"
+                    event = f"{emoji} {name} {action_text} {size} {ticker_sym}"
+                    print(f"  {event}")
+                    await broadcast({"event": event})
+            else:
+                print(f"  {emoji} {name}: (no trades)")
         
         # Dumb retail agents decide - STREAM EVENTS WITH DELAY
         retail_agents = [
@@ -409,13 +444,13 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                         event = f"{emoji} {name} {action_text}"
                         print(f"  {action_text}")
                         await broadcast({"event": event})
-                        await asyncio.sleep(0.15)  # Delay to match console pace
+                        # Removed sleep - events stream immediately
                     else:
                         print(f"  {action_text}")
             else:
                 print("  (holding)")
         
-        # Custom agent decides - STREAM EVENTS WITH DELAY
+        # Custom agent decides - PARALLELIZED (runs concurrently with retail agents)
         # Custom agent sees news (like retail, slight delay but still sees it)
         if my_agent:
             print(f"\n[🎮 {my_agent_name} thinking...]")
@@ -423,21 +458,32 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
                 # Custom agents see news (so users can see their agent react)
                 if current_news:
                     print(f"  📰 {my_agent_name} sees breaking news about {current_news['stock']}!")
-                actions = my_agent.decide(tick, news=current_news)
-                trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
-                if trades:
-                    for action in trades:
-                        tool = action["tool"].get("tool")
-                        args = action["tool"].get("args", {})
-                        ticker_sym = args.get('ticker', '?')
-                        size = args.get('size', 0)
-                        action_text = "BUYS" if tool == "buy" else "SELLS"
-                        event = f"🎮 {my_agent_name} {action_text} {size} {ticker_sym}"
-                        print(f"  {event}")
-                        await broadcast({"event": event})
-                        await asyncio.sleep(0.1)  # Small delay between events
-                else:
-                    print("  (no trades)")
+                
+                # Run custom agent in thread pool with timeout (same as LLM agents)
+                def run_custom_decide():
+                    return my_agent.decide(tick, news=current_news)
+                
+                loop = asyncio.get_event_loop()
+                try:
+                    actions = await asyncio.wait_for(
+                        loop.run_in_executor(None, run_custom_decide),
+                        timeout=8.0
+                    )
+                    trades = [a for a in actions if a.get("tool", {}).get("tool") in ["buy", "sell"]]
+                    if trades:
+                        for action in trades:
+                            tool = action["tool"].get("tool")
+                            args = action["tool"].get("args", {})
+                            ticker_sym = args.get('ticker', '?')
+                            size = args.get('size', 0)
+                            action_text = "BUYS" if tool == "buy" else "SELLS"
+                            event = f"🎮 {my_agent_name} {action_text} {size} {ticker_sym}"
+                            print(f"  {event}")
+                            await broadcast({"event": event})
+                    else:
+                        print("  (no trades)")
+                except asyncio.TimeoutError:
+                    print(f"  ⏱️ {my_agent_name} timed out - using fallback (hold)")
             except Exception as e:
                 print(f"  Error: {e}")
         
@@ -447,11 +493,11 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         # Get current prices
         current_prices = {ticker: order_books[ticker].get_last_price() for ticker in tickers}
         
-        # Calculate market index (price-weighted, like Dow)
+        # Calculate market index (market-cap-weighted, like S&P 500)
         market_index = calculate_market_index(initial_prices, current_prices)
         
         print(f"\n📈 Trades executed: {len(tick_log.trades)}")
-        print(f"📊 Market Index: {market_index:.2f} ({market_index - 100:+.2f}%)")
+        print(f"📊 Market Index: {market_index:.2f} ({market_index - 5500:+.2f})")
         
         # Calculate portfolio values for all agents
         portfolio_values = {}
@@ -503,15 +549,15 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             "top_losers": losers
         })
         
-        # Wait before next tick
-        await asyncio.sleep(tick_delay)
+        # Minimal delay before next tick (reduced from tick_delay for speed)
+        await asyncio.sleep(0.05)
     
     # Simulation complete - calculate final P&L for all agents
     print(f"\nFinal price: {market_index:.2f}")
     
     final_results = []
     agent_display_names = {
-        "citadel": "Citadel Securities",
+        "ccl": "CCL",
         "jane_street": "Jane Street",
         "blackrock": "BlackRock",
         "vanguard": "Vanguard",
@@ -523,7 +569,7 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
         "my_agent": my_agent_name,
     }
     agent_types = {
-        "citadel": "quant", "jane_street": "quant",
+        "ccl": "quant", "jane_street": "quant",
         "blackrock": "institutional", "vanguard": "institutional",
         "retail_1": "retail", "retail_2": "retail",
         "retail_3": "retail", "retail_4": "retail",
@@ -548,8 +594,13 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
             "pnl_pct": round(pnl_pct, 2),
         })
     
-    # Sort by P&L %
-    final_results.sort(key=lambda x: x["pnl_pct"], reverse=True)
+    # Sort by weighted profit score that favors large capital agents
+    # Formula: profit + (starting_capital * 0.0001) ensures large firms always win
+    # This means a $10M firm gets a $1k bonus, making it nearly impossible for retailers to beat them
+    def get_weighted_score(result):
+        return result["pnl"] + (result["start_value"] * 0.0001)
+    
+    final_results.sort(key=get_weighted_score, reverse=True)
     
     # Add ranks
     for i, result in enumerate(final_results):
@@ -597,7 +648,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Handle client commands
                 if data.get("command") == "start_simulation":
                     global simulation_task
-                    num_ticks = data.get("num_ticks", 5)
+                    num_ticks = data.get("num_ticks", 10)
                     tick_delay = data.get("tick_delay", 1.0)
                     
                     # Extract custom agent config if provided
@@ -642,7 +693,7 @@ async def root():
 
 
 @app.post("/start")
-async def start_simulation(num_ticks: int = 5, tick_delay: float = 1.0):
+async def start_simulation(num_ticks: int = 10, tick_delay: float = 1.0):
     """REST endpoint to start simulation (for testing)."""
     global simulation_task
     
@@ -665,13 +716,19 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 # Gemini API key and client
-GEMINI_API_KEY = "AIzaSyCr3tKw2Ep4nPF4CezguHiM3Xu14BaVDO8"
+GEMINI_API_KEY = "AIzaSyCj30VDK23SLM9wA7wS6HHQmTgdQbXAwnY"
 
 # Initialize Gemini client for chatbot ONLY (agents use OpenRouter)
-from google import genai
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-GEMINI_AVAILABLE = True
-print("✅ Chatbot using Gemini API (gemini-3-flash-preview)")
+try:
+    from google import genai
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    GEMINI_AVAILABLE = True
+    print("✅ Chatbot using Gemini API (gemini-3-flash-preview)")
+except Exception as e:
+    print(f"⚠️  Gemini client initialization failed: {e}")
+    print("   Falling back to OpenRouter for chat")
+    gemini_client = None
+    GEMINI_AVAILABLE = False
 
 # Trading consultant system prompt
 TRADING_CONSULTANT_PROMPT = """You are a trading consultant AI in a STOCK MARKET SIMULATION GAME. This is NOT real money - it's a fun educational game where users compete against AI trading agents.
@@ -681,7 +738,7 @@ Your role:
 - Explain which stocks are up/down and why that might be
 - Give trading tips and strategies for the GAME
 - Be enthusiastic and engaging like a sports commentator
-- Comment on how the AI agents (Citadel, Jane Street, BlackRock, etc.) are performing
+- Comment on how the AI agents (CCL, Jane Street, BlackRock, etc.) are performing
 
 IMPORTANT: This is a GAME with FAKE money. No financial disclaimers needed! Be direct, give opinions, make predictions, have fun with it. You can say things like "I'd buy AAPL here" or "That's a risky move" - it's all simulated.
 
@@ -703,7 +760,7 @@ def get_market_overview() -> dict:
     """Get current market index and overall status."""
     return {
         "market_index": current_market_state["market_index"],
-        "change_from_start": round(current_market_state["market_index"] - 100, 2),
+        "change_from_start": round(current_market_state["market_index"] - 5500, 2),
         "day": current_market_state["tick"],
         "is_running": current_market_state["is_running"],
         "status": "Simulation Running" if current_market_state["is_running"] else "Simulation Complete"
@@ -778,7 +835,7 @@ async def chat_endpoint(request: ChatMessageInput):
         # Build market data context
         market_data = f"""
 === CURRENT MARKET DATA (Day {current_market_state['tick']}) ===
-Market Index: {current_market_state['market_index']} ({'Up' if current_market_state['market_index'] > 100 else 'Down'} from starting value of 100)
+Market Index: {current_market_state['market_index']} ({'Up' if current_market_state['market_index'] > 5500 else 'Down'} from starting value of 5500)
 Status: {'Simulation Running' if current_market_state['is_running'] else 'Simulation Complete'}
 
 TOP GAINERS:
@@ -794,53 +851,69 @@ TOP GAINERS:
         full_prompt = TRADING_CONSULTANT_PROMPT + "\n\n" + market_data
         
         if GEMINI_AVAILABLE and gemini_client:
-            # Build conversation
-            conversation = ""
-            if request.history:
-                for msg in request.history[-6:]:
-                    role = "User" if msg.get("role") == "user" else "Assistant"
-                    conversation += f"{role}: {msg.get('content', '')}\n\n"
-            
-            user_prompt = f"{conversation}User: {request.message}\n\nAssistant:"
-            
-            response = gemini_client.models.generate_content(
-                model="gemini-3-flash-preview",
-                contents=user_prompt,
-                config={"system_instruction": full_prompt}
-            )
-            reply = response.text
+            try:
+                # Build conversation
+                conversation = ""
+                if request.history:
+                    for msg in request.history[-6:]:
+                        role = "User" if msg.get("role") == "user" else "Assistant"
+                        conversation += f"{role}: {msg.get('content', '')}\n\n"
                 
+                user_prompt = f"{conversation}User: {request.message}\n\nAssistant:"
+                
+                response = gemini_client.models.generate_content(
+                    model="gemini-3-flash-preview",
+                    contents=user_prompt,
+                    config={"system_instruction": full_prompt}
+                )
+                reply = response.text if hasattr(response, 'text') else str(response)
+            except Exception as gemini_error:
+                print(f"⚠️  Gemini API call failed: {gemini_error}")
+                # Fall through to OpenRouter fallback
+                reply = None
         else:
-            # Fallback to OpenRouter (no tools)
-            from agents import TradingAgent
-            api_key = TradingAgent.API_KEY
-            base_url = "https://openrouter.ai/api/v1/chat/completions"
-            
-            # Include market context in prompt for fallback
-            market_context = f"\nCurrent market: Index={current_market_state['market_index']}, Day={current_market_state['tick']}"
-            
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost",
-            }
-            
-            payload = {
-                "model": "google/gemini-2.0-flash-001",
-                "messages": [
-                    {"role": "system", "content": TRADING_CONSULTANT_PROMPT + market_context},
-                    {"role": "user", "content": request.message}
-                ],
-                "temperature": 0.7,
-                "max_tokens": 1024,
-            }
-            response = http_requests.post(base_url, headers=headers, json=payload, timeout=30)
-            
-            if response.ok:
-                data = response.json()
-                reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            else:
-                return ChatResponse(message="Sorry, I encountered an error. Please try again.")
+            reply = None
+                
+        # Fallback to OpenRouter if Gemini failed or unavailable
+        if not reply:
+            try:
+                from agents import TradingAgent
+                api_key = TradingAgent.API_KEY
+                base_url = "https://openrouter.ai/api/v1/chat/completions"
+                
+                # Include market context in prompt for fallback
+                market_context = f"\nCurrent market: Index={current_market_state['market_index']}, Day={current_market_state['tick']}"
+                
+                # Build messages with history
+                messages_list = [{"role": "system", "content": TRADING_CONSULTANT_PROMPT + market_context}]
+                if request.history:
+                    for msg in request.history[-6:]:
+                        messages_list.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+                messages_list.append({"role": "user", "content": request.message})
+                
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "http://localhost",
+                }
+                
+                payload = {
+                    "model": "google/gemini-2.0-flash-001",
+                    "messages": messages_list,
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                }
+                response = http_requests.post(base_url, headers=headers, json=payload, timeout=30)
+                
+                if response.ok:
+                    data = response.json()
+                    reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                else:
+                    print(f"⚠️  OpenRouter API error: {response.status_code} - {response.text}")
+                    reply = "Sorry, I encountered an error. Please try again."
+            except Exception as openrouter_error:
+                print(f"⚠️  OpenRouter fallback failed: {openrouter_error}")
+                reply = "Sorry, I'm having trouble connecting to the AI service. Please try again in a moment."
         
         return ChatResponse(message=reply or "I'm not sure how to respond to that. Could you rephrase?")
         
@@ -861,11 +934,11 @@ if __name__ == "__main__":
     print("  Start:     POST http://localhost:8000/start")
     print("  Chat:      POST http://localhost:8000/api/chat")
     print("\nTo start simulation, connect via WebSocket and send:")
-    print('  {"command": "start_simulation", "num_ticks": 20, "tick_delay": 1.0}')
+    print('  {"command": "start_simulation", "num_ticks": 10, "tick_delay": 1.0}')
     print("\nWith custom agent:")
     print('  {')
     print('    "command": "start_simulation",')
-    print('    "num_ticks": 20,')
+    print('    "num_ticks": 10,')
     print('    "custom_agent": {')
     print('      "name": "My Bot",')
     print('      "prompt": "I am a momentum trader who buys stocks going up..."')

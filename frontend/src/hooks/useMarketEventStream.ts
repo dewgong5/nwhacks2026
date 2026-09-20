@@ -96,11 +96,11 @@ function parseWebSocketMessage(data: string, state: MarketStore, isRecursive: bo
     // ============================================
     // FILTER: Check if this is an agent activity event
     // Priority: Check for agent activity FIRST before price events
-    // Format: {"event": "🏦 CITADEL BUYS 30 AAPL"}
+    // Format: {"event": "🏦 CCL BUYS 30 AAPL"}
     // ============================================
     
     // Check if message has "event" field with a string (agent activity message)
-    // This should catch: {"event": "🏦 CITADEL BUYS 30 AAPL"}
+    // This should catch: {"event": "🏦 CCL BUYS 30 AAPL"}
     const hasEventField = message.event !== undefined;
     const isEventString = typeof message.event === 'string';
     const hasNoPrice = message.price === undefined;
@@ -606,15 +606,15 @@ export function useMarketEventStream(
     
     const startCommand: any = {
       command: "start_simulation",
-      num_ticks: 5,
-      tick_delay: 1.0
+      num_ticks: 10,
+      tick_delay: 0.1  // Reduced from 1.0 for faster simulation
     };
     
     if (customAgent && customAgent.prompt) {
       startCommand.custom_agent = {
         name: customAgent.name,
         prompt: customAgent.prompt,
-        capital: customAgent.capital || 100000
+        capital: customAgent.capital || 5000
       };
       console.log('🎮 Starting with custom agent:', customAgent.name, 'Capital:', customAgent.capital);
     }

@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 
 // Define all agents we're tracking
 const AGENTS = [
-  { id: 'citadel', name: 'Citadel', emoji: '🏦', type: 'quant' },
+  { id: 'ccl', name: 'CCL', emoji: '🏦', type: 'quant' },
   { id: 'jane_street', name: 'Jane Street', emoji: '🏦', type: 'quant' },
   { id: 'blackrock', name: 'BlackRock', emoji: '📊', type: 'institutional' },
   { id: 'vanguard', name: 'Vanguard', emoji: '📊', type: 'institutional' },

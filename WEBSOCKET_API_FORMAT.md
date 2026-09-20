@@ -120,7 +120,7 @@ The frontend expects these exact instrument IDs:
 
 ```json
 {
-  "event": "🏦 CITADEL BUYS 30 AAPL"
+  "event": "🏦 CCL BUYS 30 AAPL"
 }
 ```
 
@@ -139,10 +139,10 @@ The frontend parses this string to extract:
     "id": "activity-123",
     "timestamp": 1704067200000,
     "agentType": "institutional",
-    "agentName": "CITADEL",
+    "agentName": "CCL",
     "action": "increased",
     "target": "AAPL",
-    "summary": "🏦 CITADEL BUYS 30 AAPL"
+    "summary": "🏦 CCL BUYS 30 AAPL"
   }
 }
 ```
@@ -151,7 +151,7 @@ The frontend parses this string to extract:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `event` | string | **Required** | Human-readable event string (e.g., `"🏦 CITADEL BUYS 30 AAPL"`) |
+| `event` | string | **Required** | Human-readable event string (e.g., `"🏦 CCL BUYS 30 AAPL"`) |
 | `id` | string | Optional | Unique activity ID (frontend generates if missing) |
 | `timestamp` | number | Optional | Unix timestamp (frontend uses current time if missing) |
 | `agentType` | string | Optional | `"institutional"`, `"retail"`, `"quant"`, or `"hft"` |
@@ -217,7 +217,7 @@ These are informational and don't create events:
 
 ```json
 {
-  "event": "🏦 CITADEL BUYS 30 AAPL"
+  "event": "🏦 CCL BUYS 30 AAPL"
 }
 ```
 
@@ -283,7 +283,7 @@ These are informational and don't create events:
 - ⚠️ `open`, `high`, `low` - **RECOMMENDED** (frontend will approximate if missing)
 
 ### For Agent Activity:
-- ✅ `event` (string) - **REQUIRED** (e.g., `"🏦 CITADEL BUYS 30 AAPL"`)
+- ✅ `event` (string) - **REQUIRED** (e.g., `"🏦 CCL BUYS 30 AAPL"`)
 
 ---
 

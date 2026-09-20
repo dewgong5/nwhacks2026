@@ -78,7 +78,7 @@ export function SidebarCTA({ userTrader, onJumpIn, onAdjust }: SidebarCTAProps) 
         </div>
         
         <p className="text-sm text-muted-foreground mb-6">
-          Write a trading strategy in plain English. Your AI agent will go head-to-head with Citadel, Jane Street, and more.
+          Write a trading strategy in plain English. Your AI agent will go head-to-head with CCL, Jane Street, and more.
         </p>
 
         <div className="space-y-3 mb-6">
