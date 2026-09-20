@@ -1,0 +1,66 @@
+schema: spec-driven
+
+context: |
+  Product: MarketMind, an nwHacks 2026 portfolio demo for a real-time stock-market simulation with AI trading agents.
+  Frontend: React 18, TypeScript, Vite, Tailwind CSS, shadcn/Radix, Recharts, Framer Motion, Vitest.
+  Backend: Python, FastAPI, WebSockets, an in-memory simulation orchestrator/order book, Google GenAI, and OpenRouter.
+  Intended audience: recruiters and portfolio reviewers, not unrestricted public production use.
+  Product priority: a reliable, polished 60-90 second demo journey. Deterministic no-cost demo behavior must remain available when paid AI providers are unavailable.
+  Security priority: no committed secrets, bounded cost-bearing features, server-side authorization and quotas, restricted origins, safe logs, and provider-side budget protection.
+  Deployment direction: Docker Compose is the practical demo deployment. Kubernetes is a separate learning artifact and must not be represented as necessary scale.
+  Current constraints: the active branch is a hackathon prototype; branch reconciliation is required; frontend lint fails; automated tests provide little regression coverage; server.py owns WebSocket, simulation, global state, and chat behavior; current process-global state is not safe for multiple backend replicas.
+  Evidence rule: distinguish local automated checks, browser acceptance, deployed infrastructure checks, provider integration checks, and human review. Never infer one from another.
+
+rules:
+  proposal:
+    - Include explicit non-goals and change dependencies.
+    - Keep each change independently reviewable and avoid implementing adjacent roadmap items.
+  specs:
+    - Use testable SHALL requirements and concrete Given/When/Then scenarios.
+    - Include failure, abuse, degraded-provider, or rollback behavior where relevant.
+  design:
+    - Record observed current behavior separately from proposed behavior.
+    - State security, cost, operational, and migration tradeoffs.
+  tasks:
+    - Break work into bounded tasks with explicit automated, browser, deployment, provider, or human acceptance evidence.
+    - Do not mark external deployment or provider behavior complete based only on local tests.
+
+operations:
+  apply:
+    guidance:
+      - Preserve unrelated worktree changes and inspect the active branch and task ledger before implementation.
+      - Stop before destructive Git history rewriting, credential revocation, production deployment, DNS changes, or provider-console mutations unless the user explicitly authorizes them.
+  archive:
+    guidance:
+      - Archive only after task evidence and strict validation match the actual completion state.
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

@@ -5,13 +5,13 @@ LLM Trading Agents using OpenRouter API.
 import json
 import requests
 from orchestration import SimulationOrchestrator, Side
+from config import get_settings
 
 
 class TradingAgent:
     """An LLM-powered trading agent that uses OpenRouter to make decisions."""
     
-    # Hardcoded API key
-    API_KEY = "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"
+    API_KEY = None
     
     def __init__(
         self,
@@ -19,17 +19,21 @@ class TradingAgent:
         orchestrator: SimulationOrchestrator,
         personality: str = "You are a rational trader.",
         model: str = "google/gemini-2.0-flash-001",
-        price_history: dict = None
+        price_history: dict = None,
+        api_key: str = None,
     ):
         self.agent_id = agent_id
         self.orchestrator = orchestrator
-        self.api_key = self.API_KEY
+        settings = get_settings()
+        self.api_key = api_key or settings.openrouter_api_key_value
         self.model = model
         self.personality = personality
         self.price_history = price_history or {}
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
     
     def _call_llm(self, messages: list[dict]) -> str:
+        if not self.api_key:
+            raise ValueError("Required provider credential missing: OPENROUTER_API_KEY")
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

@@ -6,7 +6,8 @@ Users can define their own strategy and compete against the big institutions.
 import json
 import requests
 from orchestration import SimulationOrchestrator, Side
-from agents import TradingAgent  # Import to share API key
+from agents import TradingAgent
+from config import get_settings
 
 
 class CustomTradingAgent:
@@ -15,8 +16,7 @@ class CustomTradingAgent:
     Users provide their own trading personality/strategy prompt.
     """
     
-    # Use the same API key as the main agents
-    API_KEY = TradingAgent.API_KEY
+    API_KEY = None
     
     def __init__(
         self,
@@ -24,18 +24,23 @@ class CustomTradingAgent:
         orchestrator: SimulationOrchestrator,
         custom_prompt: str,
         model: str = "google/gemini-2.0-flash-001",
-        price_history: dict = None
+        price_history: dict = None,
+        api_key: str = None,
     ):
         self.agent_id = agent_id
         self.orchestrator = orchestrator
         self.custom_prompt = custom_prompt
         self.model = model
         self.price_history = price_history or {}
+        settings = get_settings()
+        self.api_key = api_key or settings.openrouter_api_key_value
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
     
     def _call_llm(self, messages: list[dict]) -> str:
+        if not self.api_key:
+            raise ValueError("Required provider credential missing: OPENROUTER_API_KEY")
         headers = {
-            "Authorization": f"Bearer {self.API_KEY}",
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "http://localhost",
         }

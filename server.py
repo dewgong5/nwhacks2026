@@ -5,14 +5,18 @@ WebSocket API Server - Streams market simulation data in real-time.
 import asyncio
 import json
 from typing import Set
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+from config import get_settings
 from orchestration import SimulationOrchestrator, Side
 from order_book import create_order_books
 from agents import create_agent, DumbRetailHolder, DumbRetailDaytrader
 from news_events import NewsGenerator
+
+settings = get_settings()
+settings.validate_mode()
 
 # Try to import custom agent, but don't fail if it has issues
 try:
@@ -715,20 +719,24 @@ import requests as http_requests
 from pydantic import BaseModel
 from typing import Optional, List
 
-# Gemini API key and client
-GEMINI_API_KEY = "AIzaSyCj30VDK23SLM9wA7wS6HHQmTgdQbXAwnY"
+# Gemini client initialized from centralized runtime settings
+gemini_key = settings.gemini_api_key_value
+gemini_client = None
+GEMINI_AVAILABLE = False
 
-# Initialize Gemini client for chatbot ONLY (agents use OpenRouter)
-try:
-    from google import genai
-    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-    GEMINI_AVAILABLE = True
-    print("✅ Chatbot using Gemini API (gemini-3-flash-preview)")
-except Exception as e:
-    print(f"⚠️  Gemini client initialization failed: {e}")
-    print("   Falling back to OpenRouter for chat")
-    gemini_client = None
-    GEMINI_AVAILABLE = False
+if gemini_key:
+    try:
+        from google import genai
+        gemini_client = genai.Client(api_key=gemini_key)
+        GEMINI_AVAILABLE = True
+        print("✅ Chatbot using Gemini API (gemini-3-flash-preview)")
+    except Exception as e:
+        print(f"⚠️  Gemini client initialization failed: {e}")
+        print("   Falling back to OpenRouter for chat")
+        gemini_client = None
+        GEMINI_AVAILABLE = False
+else:
+    print("ℹ️  GEMINI_API_KEY not configured. Live Gemini chat disabled.")
 
 # Trading consultant system prompt
 TRADING_CONSULTANT_PROMPT = """You are a trading consultant AI in a STOCK MARKET SIMULATION GAME. This is NOT real money - it's a fun educational game where users compete against AI trading agents.
@@ -876,44 +884,49 @@ TOP GAINERS:
                 
         # Fallback to OpenRouter if Gemini failed or unavailable
         if not reply:
-            try:
-                from agents import TradingAgent
-                api_key = TradingAgent.API_KEY
-                base_url = "https://openrouter.ai/api/v1/chat/completions"
-                
-                # Include market context in prompt for fallback
-                market_context = f"\nCurrent market: Index={current_market_state['market_index']}, Day={current_market_state['tick']}"
-                
-                # Build messages with history
-                messages_list = [{"role": "system", "content": TRADING_CONSULTANT_PROMPT + market_context}]
-                if request.history:
-                    for msg in request.history[-6:]:
-                        messages_list.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-                messages_list.append({"role": "user", "content": request.message})
-                
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "http://localhost",
-                }
-                
-                payload = {
-                    "model": "google/gemini-2.0-flash-001",
-                    "messages": messages_list,
-                    "temperature": 0.7,
-                    "max_tokens": 1024,
-                }
-                response = http_requests.post(base_url, headers=headers, json=payload, timeout=30)
-                
-                if response.ok:
-                    data = response.json()
-                    reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            openrouter_key = settings.openrouter_api_key_value
+            if not openrouter_key:
+                if settings.is_deterministic_mode:
+                    reply = "Trading consultant is running in deterministic demo mode. Configure GEMINI_API_KEY or OPENROUTER_API_KEY to enable live AI responses."
                 else:
-                    print(f"⚠️  OpenRouter API error: {response.status_code} - {response.text}")
-                    reply = "Sorry, I encountered an error. Please try again."
-            except Exception as openrouter_error:
-                print(f"⚠️  OpenRouter fallback failed: {openrouter_error}")
-                reply = "Sorry, I'm having trouble connecting to the AI service. Please try again in a moment."
+                    raise HTTPException(status_code=503, detail="Required provider credential missing: OPENROUTER_API_KEY")
+            else:
+                try:
+                    base_url = "https://openrouter.ai/api/v1/chat/completions"
+
+                    # Include market context in prompt for fallback
+                    market_context = f"\nCurrent market: Index={current_market_state['market_index']}, Day={current_market_state['tick']}"
+
+                    # Build messages with history
+                    messages_list = [{"role": "system", "content": TRADING_CONSULTANT_PROMPT + market_context}]
+                    if request.history:
+                        for msg in request.history[-6:]:
+                            messages_list.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+                    messages_list.append({"role": "user", "content": request.message})
+
+                    headers = {
+                        "Authorization": f"Bearer {openrouter_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "http://localhost",
+                    }
+
+                    payload = {
+                        "model": "google/gemini-2.0-flash-001",
+                        "messages": messages_list,
+                        "temperature": 0.7,
+                        "max_tokens": 1024,
+                    }
+                    response = http_requests.post(base_url, headers=headers, json=payload, timeout=30)
+
+                    if response.ok:
+                        data = response.json()
+                        reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    else:
+                        print(f"⚠️  OpenRouter API error: {response.status_code} - {response.text}")
+                        reply = "Sorry, I encountered an error. Please try again."
+                except Exception as openrouter_error:
+                    print(f"⚠️  OpenRouter fallback failed: {openrouter_error}")
+                    reply = "Sorry, I'm having trouble connecting to the AI service. Please try again in a moment."
         
         return ChatResponse(message=reply or "I'm not sure how to respond to that. Could you rephrase?")
         
