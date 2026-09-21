@@ -3,9 +3,14 @@ WebSocket API Server - Streams market simulation data in real-time.
 """
 
 import asyncio
+from collections import deque
+import hashlib
+import hmac
 import json
+import secrets
+import time
 from typing import Set
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -31,7 +36,7 @@ app = FastAPI(title="Market Simulation API")
 # Allow CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -629,13 +634,89 @@ I am a SMART CONTRARIAN. I look for overreactions in the market.
 # Store the simulation task
 simulation_task = None
 
+_ws_ticket_secret = (
+    settings.session_secret_value.encode("utf-8")
+    if settings.session_secret_value
+    else secrets.token_bytes(32)
+)
+_used_ws_tickets: dict[str, int] = {}
+
+
+class PerConnectionRateLimiter:
+    def __init__(self, maximum: int):
+        self.maximum = maximum
+        self.timestamps: deque[float] = deque()
+
+    def allow(self) -> bool:
+        now = time.monotonic()
+        while self.timestamps and self.timestamps[0] <= now - 1.0:
+            self.timestamps.popleft()
+        if len(self.timestamps) >= self.maximum:
+            return False
+        self.timestamps.append(now)
+        return True
+
+
+def _ticket_signature(peer: str, timestamp: int, nonce: str) -> str:
+    payload = f"{peer}:{timestamp}:{nonce}".encode("utf-8")
+    return hmac.new(_ws_ticket_secret, payload, hashlib.sha256).hexdigest()
+
+
+def _purge_expired_tickets(now: int) -> None:
+    expired = [signature for signature, expiry in _used_ws_tickets.items() if expiry < now]
+    for signature in expired:
+        _used_ws_tickets.pop(signature, None)
+
+
+@app.get("/ws-ticket")
+async def websocket_ticket(request: Request):
+    """Issue a short-lived ticket bound to the direct network peer."""
+    now = int(time.time())
+    nonce = secrets.token_urlsafe(18)
+    peer = request.client.host if request.client else "unknown"
+    return {
+        "timestamp": now,
+        "nonce": nonce,
+        "signature": _ticket_signature(peer, now, nonce),
+        "ttl": settings.WS_TICKET_TTL_SECONDS,
+    }
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for streaming market data."""
+    origin = websocket.headers.get("origin")
+    if origin and origin not in settings.CORS_ORIGINS:
+        await websocket.close(code=1008, reason="origin not allowed")
+        return
+
+    timestamp_raw = websocket.query_params.get("timestamp")
+    nonce = websocket.query_params.get("nonce")
+    signature = websocket.query_params.get("signature")
+    authorized = False
+    now = int(time.time())
+    _purge_expired_tickets(now)
+    if timestamp_raw and nonce and signature and signature not in _used_ws_tickets:
+        try:
+            timestamp = int(timestamp_raw)
+            peer = websocket.client.host if websocket.client else "unknown"
+            expected = _ticket_signature(peer, timestamp, nonce)
+            authorized = (
+                0 <= now - timestamp <= settings.WS_TICKET_TTL_SECONDS
+                and hmac.compare_digest(expected, signature)
+            )
+        except (TypeError, ValueError):
+            authorized = False
+
+    if not authorized:
+        await websocket.close(code=1008, reason="unauthorized")
+        return
+
+    _used_ws_tickets[signature] = now + settings.WS_TICKET_TTL_SECONDS
     await websocket.accept()
     connected_clients.add(websocket)
     print(f"Client connected. Total clients: {len(connected_clients)}")
+    limiter = PerConnectionRateLimiter(settings.WS_MAX_MESSAGES_PER_SECOND)
     
     try:
         # Send welcome message
@@ -647,7 +728,22 @@ async def websocket_endpoint(websocket: WebSocket):
         # Keep connection alive and handle incoming messages
         while True:
             try:
-                data = await asyncio.wait_for(websocket.receive_json(), timeout=60.0)
+                frame = await asyncio.wait_for(websocket.receive(), timeout=60.0)
+                message = frame.get("text")
+                if message is None:
+                    await websocket.close(code=1003, reason="unsupported data")
+                    return
+                if len(message.encode("utf-8")) > settings.WS_MAX_MESSAGE_BYTES:
+                    await websocket.close(code=1009, reason="message too big")
+                    return
+                if not limiter.allow():
+                    await websocket.close(code=1013, reason="rate limited")
+                    return
+                try:
+                    data = json.loads(message)
+                except json.JSONDecodeError:
+                    await websocket.close(code=1003, reason="invalid json")
+                    return
                 
                 # Handle client commands
                 if data.get("command") == "start_simulation":

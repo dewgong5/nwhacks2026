@@ -42,6 +42,10 @@ class Settings(BaseSettings):
         description="Secret key for signing sessions and WebSocket auth tokens.",
     )
 
+    WS_TICKET_TTL_SECONDS: int = Field(default=60, ge=5, le=300)
+    WS_MAX_MESSAGE_BYTES: int = Field(default=8192, ge=256, le=65536)
+    WS_MAX_MESSAGES_PER_SECOND: int = Field(default=10, ge=1, le=100)
+
     # Server configuration
     HOST: str = Field(default="0.0.0.0", description="Server host binding.")
     PORT: int = Field(default=8000, description="Server port binding.")
@@ -88,6 +92,11 @@ class Settings(BaseSettings):
         if not key:
             raise ValueError("Required provider credential missing: OPENROUTER_API_KEY")
         return key
+
+    @property
+    def session_secret_value(self) -> Optional[str]:
+        """Return the unmasked session secret, or None when not configured."""
+        return self.SESSION_SECRET.get_secret_value() if self.SESSION_SECRET else None
 
     def validate_mode(self) -> None:
         """

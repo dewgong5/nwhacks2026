@@ -13,9 +13,9 @@ import {
 } from '@/types/market';
 import { useEffect, useRef, useState } from 'react';
 
-const WS_URL =
-  `${window.location.protocol === "https:" ? "wss" : "ws"}://` +
-  `${window.location.host}/ws`;
+const WS_BASE = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
+const WS_URL = `${WS_BASE}/ws`;
+const WS_TICKET_URL = '/ws-ticket';
 
 // Mock data generation removed - only WebSocket data is used
 
@@ -627,10 +627,19 @@ export function useMarketEventStream(
   
   // WebSocket connection
   useEffect(() => {
-    const connect = () => {
+    const connect = async () => {
       try {
-        console.log('Connecting to WebSocket:', WS_URL);
-        wsRef.current = new WebSocket(WS_URL);
+        const ticketResponse = await fetch(WS_TICKET_URL, { credentials: 'same-origin' });
+        if (!ticketResponse.ok) {
+          throw new Error(`WebSocket ticket request failed (${ticketResponse.status})`);
+        }
+        const ticket: { timestamp: number; nonce: string; signature: string } = await ticketResponse.json();
+        const query = new URLSearchParams({
+          timestamp: String(ticket.timestamp),
+          nonce: ticket.nonce,
+          signature: ticket.signature,
+        });
+        wsRef.current = new WebSocket(`${WS_URL}?${query.toString()}`);
 
         wsRef.current.onopen = () => {
           console.log('✅ WebSocket connected');
@@ -701,7 +710,7 @@ export function useMarketEventStream(
 
         wsRef.current.onerror = (error) => {
           console.error('WebSocket error:', error);
-          console.error('Failed to connect to:', WS_URL);
+          console.error('Failed to connect to WebSocket endpoint');
         };
 
         wsRef.current.onclose = (event) => {
