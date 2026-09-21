@@ -17,4 +17,4 @@
 
 - [x] 3.1 Run the full baseline matrix and strict OpenSpec validation on the reconciled branch; verify results distinguish pre-existing failures from regressions.
 - [x] 3.2 Review the range diff and commit history for lost or duplicated work; verify every selected branch capability maps to a reconciliation decision.
-- [ ] 3.3 Present the branch for review and obtain separate authorization before changing remote defaults, force pushing, or deleting branches; verify no such mutation occurs during unapproved apply work.
+- [x] 3.3 Present the branch for review and obtain separate authorization before changing remote defaults, force pushing, or deleting branches; verify no such mutation occurs during unapproved apply work.
